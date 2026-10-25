@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <title>dsh-web-assistant 接入测试页</title>
+    <style>
+      body {
+        font-family: system-ui, "Microsoft YaHei", sans-serif;
+        max-width: 720px;
+        margin: 40px auto;
+        padding: 0 16px;
+        line-height: 1.7;
+        color: #222;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 8px 0;
+      }
+      input,
+      button {
+        padding: 6px 12px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+      input {
+        flex: 1;
+        min-width: 240px;
+        font-family: monospace;
+      }
+      button {
+        cursor: pointer;
+        background: #f6f6f6;
+      }
+      button:hover {
+        background: #eee;
+      }
+      #log {
+        margin-top: 16px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #fafafa;
+        font-family: monospace;
+        font-size: 13px;
+        min-height: 120px;
+        white-space: pre-wrap;
+      }
+      .ok {
+        color: #0a7d32;
+      }
+      .err {
+        color: #c5221f;
+      }
+      fieldset {
+        margin-top: 24px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+      }
+      .m {
+        color: #888;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>dsh-web-assistant 接入测试页</h2>
+    <p class="m">
+      验证内容：① relay 托管脚本可达 ② data-token 自动挂载 ③ token 鉴权（错误 token 应报 invalid api
+      key）④ 页面命令执行与弹窗钩子。需先启动带新路由的 relay（dsh web）。
+    </p>
+
+    <div class="row">
+      <label>Relay Token：</label>
+      <input id="token" placeholder="粘贴向导页 http://127.0.0.1:9916 复制的口令" />
+      <button onclick="loadPanel()">加载面板</button>
+    </div>
+    <div class="row">
+      <label>Relay 地址：</label>
+      <input id="base" value="http://127.0.0.1:9916" style="min-width: 160px; flex: 0 1 260px" />
+      <button onclick="checkMount()">检查挂载状态</button>
+      <button onclick="testAuth()">测试 token 鉴权</button>
+    </div>
+    <div id="log"></div>
+
+    <fieldset>
+      <legend>页面操作演示（给 agent 的 browser_* 工具用）</legend>
+      <div class="row">
+        <label>姓名：</label><input id="f-name" placeholder="让 agent 帮我填：张三" />
+        <label>城市：</label>
+        <select id="f-city">
+          <option value="">请选择</option>
+          <option>洛阳</option>
+          <option>西安</option>
+          <option>郑州</option>
+        </select>
+      </div>
+      <div class="row">
+        <button onclick="alert('测试 alert 弹窗')">触发 alert</button>
+        <button onclick="log('confirm 结果：' + confirm('确认删除？'))">
+          触发 confirm（删除护栏应自动取消）
+        </button>
+        <button onclick="log('prompt 结果：' + (prompt('输入点什么') ?? '已取消'))">
+          触发 prompt
+        </button>
+        <button
+          onclick="
+            log(
+              '表单当前值：' +
+                JSON.stringify({
+                  name: document.getElementById('f-name').value,
+                  city: document.getElementById('f-city').value,
+                }),
+            )
+          "
+        >
+          读取表单
+        </button>
+      </div>
+      <p class="m">
+        面板加载后可直接对它下任务，例如：「读取页面标题」「把姓名填成李四，城市选西安」。
+      </p>
+    </fieldset>
+
+    <script>
+      const logEl = document.getElementById("log");
+      function log(msg, cls = "") {
+        const line = document.createElement("div");
+        if (cls) line.className = cls;
+        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        logEl.appendChild(line);
+      }
+      const tokenEl = document.getElementById("token");
+      tokenEl.value = localStorage.getItem("dshTestToken") || "";
+      document.getElementById("base").addEventListener("change", (e) => {
+        localStorage.setItem("dshTestBase", e.target.value);
+      });
+      const savedBase = localStorage.getItem("dshTestBase");
+      if (savedBase) document.getElementById("base").value = savedBase;
+
+      function loadPanel() {
+        const token = tokenEl.value.trim();
+        const base = document.getElementById("base").value.trim();
+        if (!token) return log("请先粘贴 relay token（向导页可复制）", "err");
+        localStorage.setItem("dshTestToken", token);
+        localStorage.setItem("dshTestBase", base);
+        const old = document.getElementById("dsh-assistant-script");
+        if (old) old.remove();
+        const s = document.createElement("script");
+        s.id = "dsh-assistant-script";
+        s.src = `${base}/dsh-assistant.min.js`;
+        s.dataset.token = token;
+        s.onload = () => {
+          log(`脚本加载成功（${s.src}）`, "ok");
+          if (typeof DshAssistant === "undefined")
+            return log("⚠️ 脚本已加载但 DshAssistant 全局不存在", "err");
+          log("DshAssistant 全局存在，data-token 自动挂载应已生效（右下角悬浮球）", "ok");
+        };
+        s.onerror = () => log(`脚本加载失败：${s.src}（relay 未启动或未含新路由）`, "err");
+        document.head.appendChild(s);
+        log(`已注入 <script src="${s.src}" data-token="...">`);
+      }
+
+      async function checkMount() {
+        if (typeof DshAssistant === "undefined")
+          return log("DshAssistant 未加载：先点「加载面板」", "err");
+        log("DshAssistant.mountPanel 类型：" + typeof DshAssistant.mountPanel, "ok");
+        log(
+          "提示：悬浮球/面板已挂载即自动挂载成功；手动挂载等价调用 DshAssistant.mountPanel({ baseURL, apiKey })",
+        );
+      }
+
+      // token 鉴权：错误口令应被 relay 拒绝（401 invalid api key），正确口令能创建会话
+      async function testAuth() {
+        const base = document.getElementById("base").value.trim();
+        const token = tokenEl.value.trim();
+        try {
+          const r = await fetch(`${base}/task`, {
+            method: "POST",
+            headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+            body: JSON.stringify({
+              text: "鉴权测试（可取消）",
+              url: location.href,
+              title: document.title,
+              tabKey: "test-" + Date.now(),
+            }),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (r.status === 401)
+            log("鉴权结果：401 " + (d.error?.message ?? "") + "（token 与 relay 不匹配）", "err");
+          else if (r.ok)
+            log(
+              `鉴权结果：通过，已创建任务 #${d.taskId}（session ${d.sessionId}）——面板与该测试任务互不影响，可在 dsh web 里取消它`,
+              "ok",
+            );
+          else log(`鉴权结果：HTTP ${r.status} ${JSON.stringify(d)}`, "err");
+        } catch (e) {
+          log(`请求失败：${e.message}（relay 未启动？）`, "err");
+        }
+      }
+    </script>
+  </body>
+</html>

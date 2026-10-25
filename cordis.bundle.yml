@@ -1,0 +1,7 @@
+# dsh plugin add 时由 plugin-manager 自动登记挂载，无需手动编辑任何 yml。
+# token 不写：relay 首次启动自动生成并落盘 ~/.dsh/browser-relay-token。
+- insert:
+    - id: dsh-browser-relay
+      name: dsh-browser-relay
+      config:
+        port: 9916

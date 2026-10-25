@@ -1,0 +1,21 @@
+{
+  "name": "dsh-browser-relay",
+  "version": "0.5.4",
+  "private": true,
+  "description": "DSH 与浏览器之间的通信桥：扩展任务经此在 DSH 创建会话执行，页面操作经 browser_* 工具桥接回扩展",
+  "type": "module",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "npm run build:panel && npm run build:ext",
+    "build:panel": "esbuild web-panel/src/page.js --bundle --minify --format=iife --define:IS_EXT=false --global-name=DshAssistant --outfile=panel/dsh-assistant.min.js",
+    "build:ext": "esbuild web-panel/src/ext.js --bundle --minify --format=iife --define:IS_EXT=true --outfile=extension/content/loader.js"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.bundle.yml"
+    }
+  }
+}

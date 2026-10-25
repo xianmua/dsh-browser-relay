@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>页面 AI 助手 - 设置</title>
+    <style>
+      body {
+        font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+        font-size: 13px;
+        color: #333;
+        width: 680px;
+        margin: 32px auto;
+      }
+      h2 {
+        font-size: 16px;
+        margin-bottom: 20px;
+      }
+      .field {
+        margin-bottom: 14px;
+      }
+      label {
+        display: block;
+        margin-bottom: 4px;
+        color: #666;
+      }
+      input,
+      select,
+      textarea {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 6px 8px;
+        font-size: 13px;
+        outline: none;
+        background: #fff;
+      }
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: #1a1a1a;
+      }
+      textarea {
+        height: 170px;
+        resize: vertical;
+        font-family: inherit;
+        line-height: 1.7;
+      }
+      .btn-row {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        margin-top: 20px;
+      }
+      button {
+        border: 1px solid #1a1a1a;
+        background: #1a1a1a;
+        color: #fff;
+        border-radius: 4px;
+        padding: 6px 20px;
+        cursor: pointer;
+        font-size: 13px;
+      }
+      button:hover {
+        background: #333;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>页面 AI 助手 - 设置</h2>
+    <div class="field">
+      <label for="baseURLOverride"
+        >Relay 地址（可选，留空用扩展内置地址；切换远程机器填 http://主机:端口）</label
+      >
+      <input id="baseURLOverride" placeholder="" />
+    </div>
+    <div class="field">
+      <label for="tokenOverride"
+        >Relay Token（可选，留空用扩展内置口令；连远程机器且口令不一致时才需要填）</label
+      >
+      <input id="tokenOverride" placeholder="" autocomplete="off" />
+    </div>
+    <div class="field">
+      <label for="toolScope"
+        >工具范围（默认仅页面操作工具，防止模型乱调研；开放后 DSH 其他插件工具也可用）</label
+      >
+      <select id="toolScope">
+        <option value="browser">仅页面操作工具（推荐）</option>
+        <option value="all">开放 DSH 其他插件工具（如接口取数）</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="customPrompt">自定义指令（可选，随任务发给 AI 的行为要求，每行一条）</label>
+      <textarea
+        id="customPrompt"
+        placeholder="例如：&#10;填写日期一律用今天往前推一天的日期&#10;表格里只操作前 10 行"
+      ></textarea>
+    </div>
+    <div class="btn-row">
+      <button id="save">保存</button>
+      <span id="tip"></span>
+    </div>
+    <script src="config.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>
