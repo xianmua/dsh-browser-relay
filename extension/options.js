@@ -1,5 +1,5 @@
-// 设置页：Relay 地址/Token 切换（baseURLOverride/tokenOverride，新 key 防旧版残留）+ 工具范围 + 自定义指令
-const FIELDS = ["baseURLOverride", "tokenOverride", "toolScope", "customPrompt"];
+// 设置页：Relay 地址/Token 切换（baseURLOverride/tokenOverride，新 key 防旧版残留）+ 工作区 + 工具范围 + 自定义指令
+const FIELDS = ["baseURLOverride", "tokenOverride", "workspace", "toolScope", "customPrompt"];
 
 // DEFAULTS 兜底回填，保存后以 storage 为准
 async function load() {

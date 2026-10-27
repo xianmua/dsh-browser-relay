@@ -19925,7 +19925,7 @@ ${r}
             (U.className = "playwright-highlight-label"),
             (U.style.position = "fixed"),
             (U.style.background = ge),
-            (U.style.color = "white"),
+            (U.style.color = t > 0 ? "white" : "transparent"),
             (U.style.padding = "1px 4px"),
             (U.style.borderRadius = "4px"),
             (U.style.fontSize = `${Math.min(12, Math.max(8, St.height / 2))}px`),

@@ -339,6 +339,7 @@ export function mountPanel(init = {}) {
     cfg.apiKey = o.token || cfg.apiKey;
     cfg.customPrompt = o.customPrompt || cfg.customPrompt;
     cfg.toolScope = o.toolScope || cfg.toolScope;
+    cfg.workspace = o.workspace || cfg.workspace;
     return cfg;
   }
   async function api(path, opts = {}) {
@@ -373,7 +374,7 @@ export function mountPanel(init = {}) {
       if (IS_EXT) await import(chrome.runtime.getURL("vendor/page-agent.js"));
       // 页面版与面板同域同世界，相对路径动态 import（构建期内联；复用 extension/vendor 唯一副本）
       else await import("../../extension/vendor/page-agent.js");
-      pc = new window.PageController({ enableMask: true });
+      pc = new window.PageController({ enableMask: true, highlightLabelOpacity: 0 });
     }
     return pc;
   }
@@ -629,6 +630,11 @@ export function mountPanel(init = {}) {
 
   async function runTool(tool, args) {
     const c = await ensureController();
+    try {
+      await c.showMask(); // 显示模拟光标：点击时可见移动+涟漪动画（shown 幂等，遮罩缺失不影响命令）
+    } catch {
+      /* 无 mask 不阻塞操作 */
+    }
     switch (tool) {
       case "browser_get_state": {
         const st = await c.getBrowserState();
@@ -768,7 +774,7 @@ export function mountPanel(init = {}) {
       /* 清理失败不影响任务收尾 */
     }
   }
-  // 任务收尾共享重置：停止标志/输入态/弹窗钩子/高亮残留/提问卡一次清干净
+  // 任务收尾共享重置：停止标志/输入态/弹窗钩子/高亮残留/模拟光标/提问卡一次清干净
   function resetTask() {
     activeTaskId = 0;
     cancelRequested = false;
@@ -777,6 +783,11 @@ export function mountPanel(init = {}) {
     setRunning(false);
     setDialogHook("off");
     clearHighlights();
+    try {
+      pc?.hideMask(); // 收起模拟光标，交还页面给用户
+    } catch {
+      /* 清理失败不影响任务收尾 */
+    }
     hideQuestion();
   }
   function finishTask(d) {
@@ -1028,7 +1039,7 @@ export function mountPanel(init = {}) {
     addUserBubble(task);
     clearHighlights(); // 兜底清掉上一任务可能残留的索引标注
     try {
-      const { customPrompt, toolScope } = await readCfg();
+      const { customPrompt, toolScope, workspace } = await readCfg();
       const d = await api("/task", {
         method: "POST",
         body: JSON.stringify({
@@ -1038,6 +1049,7 @@ export function mountPanel(init = {}) {
           pageKey: pageKey(),
           customPrompt: customPrompt || "",
           toolScope: toolScope || "browser",
+          workspace: workspace || "",
           tabKey,
         }),
       });
@@ -1175,6 +1187,7 @@ export function mountPanel(init = {}) {
     setboxEl.innerHTML = `
       <label>Relay 地址</label><input class="s-url" value="${esc(cfg.baseURL)}">
       <label>Relay Token</label><input class="s-token" value="${esc(cfg.apiKey)}">
+      <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区">
       <label>工具范围</label>
       <select class="s-scope"><option value="browser">browser = 仅页面操作工具</option><option value="all">all = 开放其他插件工具</option></select>
       <label>自定义要求（随任务发给 agent）</label><input class="s-prompt" value="${esc(cfg.customPrompt)}">
@@ -1187,6 +1200,7 @@ export function mountPanel(init = {}) {
       await cfgSave({
         baseURL: v(".s-url"),
         token: v(".s-token"),
+        workspace: v(".s-ws"),
         toolScope: v(".s-scope"),
         customPrompt: v(".s-prompt"),
       });
