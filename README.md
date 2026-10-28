@@ -28,13 +28,22 @@ dsh web
 业务页面 header 里加一行即可挂载悬浮窗（token 在向导页复制）：
 
 ```html
+<!-- 直连本机 relay -->
 <script src="http://127.0.0.1:9916/dsh-assistant.min.js" data-token="向导页复制的口令"></script>
+
+<!-- 经后端代理接入（推荐，业务用户零配置）：src 与 data-base-url 填代理前缀，
+     代理需把该前缀的所有路由（不只 js 文件）整体转发到 relay -->
+<script src="/prod-api/dsh-tjsmart/dsh-assistant.min.js"
+        data-base-url="/prod-api/dsh-tjsmart"
+        data-token="向导页复制的口令"
+        data-workspace="D:\试验报告"></script>
 ```
 
+- 属性优先级：设置面板本机覆盖 > `data-*` 注入 > 默认值；`data-workspace` 可省（留空则会话不分组）
 - 由 relay 托管面板脚本（IIFE 打包产物，仓库内 `panel/` 目录），连 `npm install` 都不用；relay 更新后刷新页面即拿到新版
-- 也可省略 `data-token`，由页面 JS 调 `DshAssistant.mountPanel({ baseURL, apiKey })` 手动挂载
+- 也可省略 `data-token`，由页面 JS 调 `DshAssistant.mountPanel({ baseURL, apiKey, workspace })` 手动挂载
 - 面板与扩展**单一源码**（`web-panel/src/`，经 env.js 适配层 + esbuild 双构建）；改码后 `npm run build` 一次产出 `panel/dsh-assistant.min.js` 与 `extension/content/loader.js`
-- 页面 CSP 需放行 `script-src http://127.0.0.1:9916`（内网系统一般未配 CSP，默认可用）
+- 页面 CSP 需放行 `script-src` 对应域名（内网系统一般未配 CSP，默认可用）
 - 接入测试页：`web-panel/test.html`（脚本加载/自动挂载/鉴权对照/弹窗钩子/表单演示）
 
 ## 连接远程 relay（浏览器在本机、DSH 在另一台机器）
@@ -119,4 +128,14 @@ netsh advfirewall firewall add rule name="dsh-browser-relay" dir=in action=allow
 
 - `9916` 端口有鉴权口令门禁（每机自动生成，仅存本机 `~/.dsh/browser-relay-token`），防止本机其他网页冒用；向导页不含 CORS 头，外部网页读不到口令
 - 口令随扩展 zip 一起写入扩展目录——zip 与解压目录都只在本机使用，不要分发给他人（对方机器口令不匹配，本来也用不了）
-- 扩展设置页可改「Relay 地址」和「Relay Token」（均留空用 zip 注入的本机值；连远程机器且口令不一致时在设置页填远程口令即可），新 key 隔离防旧版残留
+- 扩展设置页可改「Relay 地址」「Relay Token」「工作区」「操作轨迹」「工具范围」（均留空/默认用注入值；连远程机器且口令不一致时在设置页填远程口令即可），新 key 隔离防旧版残留
+- 「操作轨迹」可选是否在页面上展示模拟光标与点击特效（默认展示；选「否」后工具静默执行，立即生效）
+
+## 版本 0.5.7 变更摘要
+
+- 设置面板新增「操作轨迹」开关：关闭后页面不再出现模拟光标与点击特效
+- chat 会话空闲轮询退避（800ms → 4s 封顶，有动静恢复），降低代理链路空闲流量
+- 回合失败/提交失败时控制台打印完整错误堆栈与 cause，便于定位断在哪一跳
+- 宿主回合收尾异常时按会话内容容错判定结果（Desktop 0.2.1-rc.3 收尾 TypeError 不再误报失败）
+- 建会话显式登记工作区（`resolveByPath` 传字符串路径 + `attachSession` 补挂），不再产生 Ungrouped 会话
+- 页面接入支持 `data-workspace` 属性注入默认工作区
