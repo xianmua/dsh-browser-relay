@@ -937,6 +937,7 @@ export function mountPanel(init = {}) {
     const myGen = ++pollGen;
     let after = 0;
     let wasRunning = null; // chat 模式运行态变化检测（避免每轮重复切 hook）
+    let idleMs = 800; // chat 空闲轮询间隔（无动静翻倍退避至 4s，有动静恢复 800ms）
     try {
       while (true) {
         if (myGen !== pollGen) return;
@@ -983,7 +984,12 @@ export function mountPanel(init = {}) {
           }
           // 会话模式回合结束不走 finishTask/resetTask（任务常驻），空闲期每次 poll 清索引标注（防切换拍漏清）
           if (!r) clearHighlights();
-          if (!r) await new Promise((resolve) => setTimeout(resolve, 800));
+          // 空闲退避：运行中/有新事件/命令/提问 → 保持 800ms 快轮询；持续空闲 → 800ms 翻倍至 4s 封顶，省空闲期代理流量
+          idleMs =
+            r || (d.events?.length ?? 0) > 0 || d.command || d.question
+              ? 800
+              : Math.min(idleMs * 2, 4000);
+          if (!r) await new Promise((resolve) => setTimeout(resolve, idleMs));
           continue;
         }
         if (d.status !== "running") {
