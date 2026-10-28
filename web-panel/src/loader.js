@@ -520,6 +520,18 @@ export function mountPanel(init = {}) {
   }
 
   // 下拉一步到位：原生 select 直选；自定义下拉（el-select/antd 等）点开面板按文本点选
+  // 残留浮层收口：上轮失败的旧面板不关，下轮 get_state 会让面板选项占索引（漂移）且两面板并存匹配串台
+  function closeLeftoverPoppers() {
+    const active = document.querySelector(
+      '.el-popper[aria-hidden="false"], .ant-select-dropdown:not(.ant-select-dropdown-hidden), .el-picker-panel, .el-cascader__dropdown',
+    );
+    if (!active) return false;
+    for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"])
+      document.body.dispatchEvent(
+        new MouseEvent(type, { bubbles: true, cancelable: true, view: window }),
+      );
+    return true;
+  }
   async function selectByText(index, text) {
     const label = `（index ${index}）`;
     if (text == null || String(text).trim() === "")
@@ -529,6 +541,8 @@ export function mountPanel(init = {}) {
     if (native.ok) return native;
     let denied = await confirmOptionClick(c.selectorMap.get(index)?.ref); // 打开面板的点击也可能落在删除按钮上
     if (denied) return denied;
+    // 点开前先收掉残留面板（上一轮失败留下的），防两面板并存让索引漂移、选项匹配串台
+    if (closeLeftoverPoppers()) await sleep(250);
     // 点开前快照：点开后新出现的浮层 = 面板（类名识别不到的组件库也能找到选项）
     const before = new Set();
     for (const el of document.querySelectorAll("body *")) {
@@ -783,6 +797,7 @@ export function mountPanel(init = {}) {
     setRunning(false);
     setDialogHook("off");
     clearHighlights();
+    closeLeftoverPoppers(); // 顺手收掉残留下拉浮层
     try {
       pc?.hideMask(); // 收起模拟光标，交还页面给用户
     } catch {
@@ -952,9 +967,17 @@ export function mountPanel(init = {}) {
             wasRunning = r;
             setRunning(r);
             setDialogHook(r ? "on" : "off");
-            if (!r) attachActionBar(taskId, d.usage); // 回合结束：最后一条回复挂操作条（含刷新重放首拍）
+            if (!r) {
+              attachActionBar(taskId, d.usage); // 回合结束：最后一条回复挂操作条（含刷新重放首拍）
+              try {
+                pc?.hideMask(); // 回合结束收起模拟光标与点击特效，页面交还用户
+              } catch {
+                /* 清理失败不影响收尾 */
+              }
+              closeLeftoverPoppers(); // 顺手收掉回合残留下拉浮层（仅切换拍一次，不动用户手开的下拉）
+            }
           }
-          // 会话模式回合结束不走 finishTask/resetTask（任务常驻），空闲期每次 poll 都清索引标注（防切换拍漏清）
+          // 会话模式回合结束不走 finishTask/resetTask（任务常驻），空闲期每次 poll 清索引标注（防切换拍漏清）
           if (!r) clearHighlights();
           if (!r) await new Promise((resolve) => setTimeout(resolve, 800));
           continue;
