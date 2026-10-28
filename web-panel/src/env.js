@@ -13,6 +13,7 @@ export async function cfgOverrides() {
       customPrompt: "",
       toolScope: "",
       workspace: "",
+      showFx: "",
     });
     return {
       baseURL: String(st.baseURLOverride ?? "").trim(),
@@ -20,6 +21,7 @@ export async function cfgOverrides() {
       customPrompt: st.customPrompt || "",
       toolScope: st.toolScope || "",
       workspace: st.workspace || "",
+      showFx: st.showFx || "",
     };
   }
   const ls = (k) => localStorage.getItem(`dshAssistant.${k}`) ?? "";
@@ -29,11 +31,12 @@ export async function cfgOverrides() {
     customPrompt: ls("customPrompt"),
     toolScope: ls("toolScope"),
     workspace: ls("workspace"),
+    showFx: ls("showFx"),
   };
 }
 
 // 配置覆盖写入（设置弹层保存）：留空值 = 移除覆盖
-export async function cfgSave({ baseURL, token, toolScope, customPrompt, workspace }) {
+export async function cfgSave({ baseURL, token, toolScope, customPrompt, workspace, showFx }) {
   if (isExt) {
     const put = {};
     if (baseURL) put.baseURLOverride = baseURL;
@@ -41,6 +44,7 @@ export async function cfgSave({ baseURL, token, toolScope, customPrompt, workspa
     if (toolScope) put.toolScope = toolScope;
     if (customPrompt) put.customPrompt = customPrompt;
     if (workspace) put.workspace = workspace;
+    if (showFx) put.showFx = showFx;
     await chrome.storage.local.set(put);
     return;
   }
@@ -51,6 +55,7 @@ export async function cfgSave({ baseURL, token, toolScope, customPrompt, workspa
   put("toolScope", toolScope);
   put("customPrompt", customPrompt);
   put("workspace", workspace);
+  put("showFx", showFx);
 }
 
 // 清除全部配置覆盖，回落 zip 注入值 / mountPanel(init) / 默认值
@@ -62,9 +67,10 @@ export async function cfgClear() {
       "customPrompt",
       "toolScope",
       "workspace",
+      "showFx",
     ]);
     return;
   }
-  for (const k of ["baseURL", "token", "toolScope", "customPrompt", "workspace"])
+  for (const k of ["baseURL", "token", "toolScope", "customPrompt", "workspace", "showFx"])
     localStorage.removeItem(`dshAssistant.${k}`);
 }

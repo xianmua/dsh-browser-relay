@@ -340,6 +340,7 @@ export function mountPanel(init = {}) {
     cfg.customPrompt = o.customPrompt || cfg.customPrompt;
     cfg.toolScope = o.toolScope || cfg.toolScope;
     cfg.workspace = o.workspace || cfg.workspace;
+    cfg.showFx = o.showFx || cfg.showFx; // 操作轨迹特效开关（on/off）
     return cfg;
   }
   async function api(path, opts = {}) {
@@ -644,10 +645,13 @@ export function mountPanel(init = {}) {
 
   async function runTool(tool, args) {
     const c = await ensureController();
+    // 操作轨迹特效：设置选「否」时不展示模拟光标（ hideMask 兜底收掉已展示的）
+    const wantFx = (await readCfg()).showFx !== "off";
     try {
-      await c.showMask(); // 显示模拟光标：点击时可见移动+涟漪动画（shown 幂等，遮罩缺失不影响命令）
+      if (wantFx) await c.showMask();
+      else await c.hideMask();
     } catch {
-      /* 无 mask 不阻塞操作 */
+      /* 无 mask 不影响操作 */
     }
     switch (tool) {
       case "browser_get_state": {
@@ -1211,11 +1215,14 @@ export function mountPanel(init = {}) {
       <label>Relay 地址</label><input class="s-url" value="${esc(cfg.baseURL)}">
       <label>Relay Token</label><input class="s-token" value="${esc(cfg.apiKey)}">
       <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区">
+      <label>操作轨迹（页面模拟光标与点击特效）</label>
+      <select class="s-fx"><option value="on">是 = 显示模拟光标与点击特效</option><option value="off">否 = 静默执行不展示</option></select>
       <label>工具范围</label>
       <select class="s-scope"><option value="browser">browser = 仅页面操作工具</option><option value="all">all = 开放其他插件工具</option></select>
       <label>自定义要求（随任务发给 agent）</label><input class="s-prompt" value="${esc(cfg.customPrompt)}">
       <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>`;
     setboxEl.querySelector(".s-scope").value = cfg.toolScope;
+    setboxEl.querySelector(".s-fx").value = cfg.showFx === "off" ? "off" : "on";
     setboxEl.hidden = false;
     // 保存即写配置覆盖（扩展=chrome.storage / 页面=localStorage，readCfg 每次请求现读，下个任务即生效）；留空 = 移除该项覆盖
     setboxEl.querySelector(".save").addEventListener("click", async () => {
@@ -1224,6 +1231,7 @@ export function mountPanel(init = {}) {
         baseURL: v(".s-url"),
         token: v(".s-token"),
         workspace: v(".s-ws"),
+        showFx: v(".s-fx"),
         toolScope: v(".s-scope"),
         customPrompt: v(".s-prompt"),
       });
