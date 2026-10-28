@@ -319,7 +319,11 @@ export function mountPanel(init = {}) {
     usageEl.textContent = total > 0 ? `${fmtTok(total)} tok` : "";
     const timeEl = document.createElement("span");
     timeEl.className = "meta";
-    timeEl.textContent = new Date().toTimeString().slice(0, 5);
+    // 本回合耗时（面板提交 → 回合结束）；无起点（如刷新后恢复）回落显示完成时刻
+    if (turnStartMs > 0) {
+      const s = (Date.now() - turnStartMs) / 1000;
+      timeEl.textContent = s < 60 ? `${s.toFixed(1)}s` : `${Math.floor(s / 60)}m${Math.round(s % 60)}s`;
+    } else timeEl.textContent = new Date().toTimeString().slice(0, 5);
     const sp = document.createElement("span");
     sp.className = "sp";
     bar.append(copyBtn, tip, sp, usageEl, timeEl);
@@ -782,6 +786,8 @@ export function mountPanel(init = {}) {
   // ---------- 任务轮询与提交 ----------
   let activeTaskId = 0;
   let cancelRequested = false; // 本地停止标志：中断 batch 循环、跳过后续命令执行
+  // 当前回合起点（面板提交 → 回合结束），操作条据此显示回合耗时；sessionStorage 持久化刷新后仍可算
+  let turnStartMs = Number(sessionStorage.getItem("dshAiTurnStart")) || 0;
   // 清除 get_state 留下的元素索引标注框（vendor 只在路由变化时清理，任务结束需主动清）
   function clearHighlights() {
     try {
@@ -1055,6 +1061,8 @@ export function mountPanel(init = {}) {
           method: "POST",
           body: JSON.stringify({ text: task, tabKey }),
         });
+        turnStartMs = Date.now(); // 续聊新回合起点（操作条据此显示回合耗时）
+        sessionStorage.setItem("dshAiTurnStart", String(turnStartMs));
         setRunning(true);
         // 气泡由 relay 的 user 事件经 poll 回显（刷新重放也能恢复），本地不重复画
         setStatus("已提交，DSH agent 执行中");
@@ -1071,6 +1079,8 @@ export function mountPanel(init = {}) {
     }
     addUserBubble(task);
     clearHighlights(); // 兜底清掉上一任务可能残留的索引标注
+    turnStartMs = Date.now(); // 新任务回合起点（操作条据此显示回合耗时）
+    sessionStorage.setItem("dshAiTurnStart", String(turnStartMs));
     try {
       const { customPrompt, toolScope, workspace } = await readCfg();
       const d = await api("/task", {

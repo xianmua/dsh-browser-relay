@@ -33,10 +33,10 @@ dsh web
 
 <!-- 经后端代理接入（推荐，业务用户零配置）：src 与 data-base-url 填代理前缀，
      代理需把该前缀的所有路由（不只 js 文件）整体转发到 relay -->
-<script src="/prod-api/dsh-tjsmart/dsh-assistant.min.js"
-        data-base-url="/prod-api/dsh-tjsmart"
+<script src="/your-proxy/dsh-assistant.min.js"
+        data-base-url="/your-proxy"
         data-token="向导页复制的口令"
-        data-workspace="D:\试验报告"></script>
+        data-workspace="D:\工作区"></script>
 ```
 
 - 属性优先级：设置面板本机覆盖 > `data-*` 注入 > 默认值；`data-workspace` 可省（留空则会话不分组）
