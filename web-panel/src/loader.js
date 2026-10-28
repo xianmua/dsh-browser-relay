@@ -5,10 +5,46 @@
 
 import { DEFAULTS } from "./config.js";
 import { isExt, cfgOverrides, cfgSave, cfgClear } from "./env.js";
+import "../../extension/vendor/highlight.min.js"; // UMD 副作用：挂 window.hljs（围栏代码语法着色）
 import "../../extension/vendor/marked.min.js"; // UMD 副作用：挂 window.marked（与扩展 manifest 预加载等价）
 import "../../extension/vendor/purify.min.js"; // UMD 副作用：挂 window.DOMPurify
 
 const INIT = {}; // mountPanel(init) 每次调用合并进此对象（token/baseURL 等挂载配置），readCfg 时优先于 DEFAULTS
+
+// ---------- DSH 渲染核心（core/dsh-md-core.js）按需加载 ----------
+// react+shiki+katex+ui-primitives 独立成 core 产物，loader 保持轻量；加载失败降级 marked 轻量管线
+let coreApi = null; // 已加载的 core 模块
+let corePromise = null;
+function loadCore() {
+  if (corePromise) return corePromise;
+  corePromise = (async () => {
+    if (isExt) {
+      // 扩展版：content script 动态 import 扩展内资源（web_accessible_resources 放行，同 page-agent 模式）
+      return await import(chrome.runtime.getURL("core/dsh-md-core.js"));
+    }
+    // 页面版：module script 注入（src 走 relay 静态路由，API 挂 window.__DshMdCore）
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.type = "module";
+      s.src = `${relayBase}/dsh-md-core.js`;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error(`core 加载失败：${s.src}`));
+      document.head.appendChild(s);
+    });
+    if (!window.__DshMdCore) throw new Error("core 加载后未注册 window.__DshMdCore");
+    return window.__DshMdCore;
+  })()
+    .then((m) => {
+      coreApi = m;
+      return m;
+    })
+    .catch((e) => {
+      console.warn("[dsh-assistant] 渲染核心不可用，markdown 降级 marked 轻量管线：", e);
+      corePromise = null; // 允许下次重试
+      return null;
+    });
+  return corePromise;
+}
 
 export function mountPanel(init = {}) {
   Object.assign(INIT, init);
@@ -69,9 +105,22 @@ export function mountPanel(init = {}) {
       .step.md th, .step.md td { border: 1px solid #e5e5e5; padding: 3px 8px; font-size: 12px; text-align: left; }
       .step.md th { background: #fafafa; }
       .step.md blockquote { border-left: 3px solid #e5e5e5; margin: 4px 0; padding: 0 8px; color: #888; }
-      .step.md pre { background: #f6f8fa; padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
+      .step.md pre { background: #f6f8fa; padding: 8px 10px; border-radius: 6px; overflow-x: auto; position: relative; }
+      .step.md pre .lang { position: absolute; top: 4px; right: 6px; font-size: 10px; line-height: 1; color: #b0b7bf; font-family: ui-monospace, Menlo, Consolas, monospace; text-transform: uppercase; user-select: none; pointer-events: none; }
+      iframe.genui-frame { display: block; width: 100%; min-height: 60px; border: 1px solid #e5e5e5; border-radius: 6px; background: #fff; }
       .step.md code { background: #f6f8fa; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
       .step.md pre code { background: none; padding: 0; }
+      /* hljs token 配色（github light，匹配浅色代码底） */
+      .step.md .hljs-comment, .step.md .hljs-quote { color: #6a737d; font-style: italic; }
+      .step.md .hljs-keyword, .step.md .hljs-selector-tag, .step.md .hljs-literal, .step.md .hljs-doctag, .step.md .hljs-name { color: #d73a49; }
+      .step.md .hljs-string, .step.md .hljs-regexp, .step.md .hljs-addition, .step.md .hljs-attribute, .step.md .hljs-meta .hljs-string { color: #032f62; }
+      .step.md .hljs-number, .step.md .hljs-symbol, .step.md .hljs-bullet, .step.md .hljs-variable, .step.md .hljs-template-variable, .step.md .hljs-link, .step.md .hljs-selector-attr { color: #005cc5; }
+      .step.md .hljs-title, .step.md .hljs-title.class_, .step.md .hljs-title.function_, .step.md .hljs-section { color: #6f42c1; }
+      .step.md .hljs-type, .step.md .hljs-class .hljs-title, .step.md .hljs-built_in, .step.md .hljs-builtin-name { color: #e36209; }
+      .step.md .hljs-attr, .step.md .hljs-property, .step.md .hljs-selector-id, .step.md .hljs-selector-class, .step.md .hljs-params { color: #22863a; }
+      .step.md .hljs-deletion { color: #b31d28; background: #ffeef0; }
+      .step.md .hljs-emphasis { font-style: italic; }
+      .step.md .hljs-strong { font-weight: 600; }
       .step.md a { color: #1a73e8; }
       .act-bar {
         display: flex; align-items: center; gap: 12px; margin-top: 4px;
@@ -160,7 +209,8 @@ export function mountPanel(init = {}) {
       .qbox .qsub:disabled { background: #bbb; cursor: not-allowed; }
       .setbox { border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; padding: 8px 16px 10px; font-size: 13px; }
       .setbox label { display: block; color: #999; font-size: 12px; margin: 6px 0 2px; }
-      .setbox input, .setbox select { width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 13px; border: 1px solid #ddd; border-radius: 6px; }
+      .setbox input, .setbox select, .setbox textarea { width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 13px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; }
+      .setbox textarea { resize: vertical; min-height: 56px; }
       .setbox .row2 { display: flex; gap: 8px; margin-top: 8px; }
       .setbox .row2 button { flex: 1; padding: 6px 0; font-size: 13px; border-radius: 6px; cursor: pointer; }
       .setbox .save { border: none; background: #1a1a1a; color: #fff; }
@@ -175,7 +225,7 @@ export function mountPanel(init = {}) {
           <button class="newchat" title="开新会话（断开当前任务，下一条输入将新建任务）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <button class="settings" title="设置（Relay 地址 / Token / 工具范围 / 自定义要求）">
+          <button class="settings" title="设置（Relay 地址 / Token / 工作区 / 工具范围 / 自定义 prompt）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
           <button class="collapse" title="最小化">
@@ -230,6 +280,53 @@ export function mountPanel(init = {}) {
       ADD_ATTR: ["target"],
     });
   }
+  // ---------- GenUI（```dsh-ui 围栏，@changfenhuang/dsh-genui 插件）----------
+  // runtime 由 DSH webserver 的 /plugins/.../assets/standalone-runtime.js 提供，面板 sandbox iframe 内渲染；
+  // 需要按需引擎（echart/mermaid/scene3d）时由 runtime 自行回退，声明式组件（布局/展示/chart/本地交互）全保真
+  let relayBase = ""; // api() 每次刷新，addStep 渲染 GenUI iframe 时引用
+  function buildGenuiFrame(specText) {
+    let spec;
+    try {
+      spec = JSON.parse(specText);
+    } catch {
+      return null; // 残缺/流式中的 spec → 保留原代码块
+    }
+    if (!spec || typeof spec !== "object" || !Array.isArray(spec.items)) return null;
+    const locale = (navigator.language || "zh").toLowerCase().startsWith("zh") ? "zh" : "en";
+    const boot = `<!doctype html><html><head><meta charset="utf-8"><style>
+html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+#genui-root{padding:8px}
+#genui-err{display:none;padding:8px;font-size:12px;color:#8a8f99}
+</style></head><body>
+<div id="genui-root"></div><div id="genui-err"></div>
+<script src="${relayBase}/plugins/@changfenhuang/dsh-genui/assets/standalone-runtime.js"><\/script>
+<script>
+(function(){
+  var spec = ${JSON.stringify(spec).replace(/</g, "\\u003c")};
+  var root = document.getElementById("genui-root");
+  function report(){ try{ parent.postMessage({type:"genui-height",h:document.documentElement.scrollHeight},"*"); }catch(e){} }
+  function fail(msg){
+    root.style.display="none";
+    var err=document.getElementById("genui-err");
+    err.style.display="block";
+    err.textContent="此 GenUI 组件需图形引擎支持，请在 DSH web UI 查看完整渲染（"+msg+"）";
+    report();
+  }
+  try{
+    if(!window.__GenuiStandalone__) return fail("runtime 未加载，需安装 genui 插件");
+    window.__GenuiStandalone__.mount(root,{format:"dsh-genui",version:1,spec:spec,presentation:{locale:${JSON.stringify(locale)},theme:"light"}});
+    new MutationObserver(function(){ setTimeout(report,60); }).observe(document.body,{subtree:true,childList:true});
+    setTimeout(report,300);
+  }catch(e){ fail(e&&e.message||String(e)); }
+})();
+<\/script></body></html>`;
+    const f = document.createElement("iframe");
+    f.className = "genui-frame";
+    f.setAttribute("sandbox", "allow-scripts"); // 无 allow-same-origin：spec 与宿主页完全隔离
+    f.srcdoc = boot;
+    f.style.height = "200px";
+    return f;
+  }
   function addUserBubble(text) {
     // 用户输入：右侧深色气泡（轻量混排，其余事件仍是日志行）
     const el = document.createElement("div");
@@ -262,10 +359,56 @@ export function mountPanel(init = {}) {
     curThink = null;
     const div = document.createElement("div");
     div.className = isError ? "step err" : md ? "step md" : "step";
-    if (md) div.innerHTML = renderMd(text);
-    else div.textContent = text;
+    if (md) {
+      // 首选：DSH 原版渲染核心（按需加载 core 产物）；失败/不可用降级 marked 轻量管线
+      void renderMdCore(div, text);
+    } else div.textContent = text;
     stepsEl.appendChild(div);
     stepsEl.scrollTop = stepsEl.scrollHeight;
+  }
+
+  // DSH 渲染核心渲染一步骤（异步等待 core 就绪；div 先入列保证步骤顺序）
+  async function renderMdCore(div, text) {
+    const core = coreApi ?? (await loadCore());
+    if (!div.isConnected) return; // 新会话已清空
+    if (core) {
+      try {
+        core.renderDshMd(div, text, (specText) => buildGenuiFrame(specText));
+        stepsEl.scrollTop = stepsEl.scrollHeight;
+        return;
+      } catch (e) {
+        console.warn("[dsh-assistant] DSH 渲染失败，降级 marked：", e);
+      }
+    }
+    renderMdLegacy(div, text);
+  }
+
+  // marked 轻量渲染（DSH 管线失败时的 fallback）
+  function renderMdLegacy(div, text) {
+    div.innerHTML = renderMd(text);
+    // ```dsh-ui 围栏 → GenUI sandbox iframe 渲染（解析失败保留代码块）
+    for (const pre of [...div.querySelectorAll("pre code.language-dsh-ui")].map((c) => c.closest("pre"))) {
+      if (!pre) continue;
+      const frame = buildGenuiFrame(pre.textContent);
+      if (frame) pre.replaceWith(frame);
+    }
+    // 普通围栏代码：语法着色 + 右上角语言标签（对齐 DSH web UI；hljs 失败/缺失时保留纯色代码块）
+    for (const pre of div.querySelectorAll("pre")) {
+      const code = pre.querySelector("code");
+      if (!code) continue;
+      try {
+        globalThis.hljs?.highlightElement(code);
+      } catch {
+        /* 高亮失败不影响渲染 */
+      }
+      const m = /language-([\w#+-]+)/.exec(code.className);
+      if (m) {
+        const tag = document.createElement("span");
+        tag.className = "lang";
+        tag.textContent = m[1];
+        pre.appendChild(tag);
+      }
+    }
   }
 
   // ---------- 回合回复操作条：复制 + 用量与时间（对齐 DSH web UI）----------
@@ -349,6 +492,8 @@ export function mountPanel(init = {}) {
   }
   async function api(path, opts = {}) {
     const cfg = await readCfg();
+    relayBase = cfg.baseURL; // GenUI iframe runtime 地址引用；页面版 core 加载 URL 也基于此
+    void loadCore(); // 预取渲染核心（不阻塞；失败静默降级 marked）
     const r = await fetch(`${cfg.baseURL}${path}`, {
       ...opts,
       headers: {
@@ -721,6 +866,13 @@ export function mountPanel(init = {}) {
   const dialogLog = [];
   window.addEventListener("message", (e) => {
     if (e.data?.__dshDialog) dialogLog.push(e.data.__dshDialog);
+    // GenUI iframe 内容高度自适应
+    if (e.data?.type === "genui-height" && typeof e.data.h === "number") {
+      const f = [...stepsEl.querySelectorAll("iframe.genui-frame")].find(
+        (x) => x.contentWindow === e.source,
+      );
+      if (f) f.style.height = `${Math.min(Math.max(e.data.h, 60), 2400)}px`;
+    }
   });
   const setDialogHook = (mode) => window.postMessage({ __dshDialogCtl: { mode } }, "*");
   // 取走本轮命令期间累积的弹窗记录，转成结果附注
@@ -933,6 +1085,7 @@ export function mountPanel(init = {}) {
     }
     pollGen++; // 旧轮询循环检测到代际变化自行退出
     resetTask();
+    if (coreApi) for (const el of stepsEl.children) coreApi.unmountDshRd(el); // 卸载 DSH 渲染的 React root
     stepsEl.replaceChildren();
     addStep("已开新会话：下一条输入将新建任务（旧会话可在 DSH web UI 回看）");
     setStatus("空闲（输入即新任务）");
@@ -1235,7 +1388,7 @@ export function mountPanel(init = {}) {
       <select class="s-fx"><option value="on">是 = 显示模拟光标与点击特效</option><option value="off">否 = 静默执行不展示</option></select>
       <label>工具范围</label>
       <select class="s-scope"><option value="browser">browser = 仅页面操作工具</option><option value="all">all = 开放其他插件工具</option></select>
-      <label>自定义要求（随任务发给 agent）</label><input class="s-prompt" value="${esc(cfg.customPrompt)}">
+      <label>自定义 prompt（随任务发给 agent）</label><textarea class="s-prompt" placeholder="对当前业务页的全局要求，如输出格式、固定流程">${esc(cfg.customPrompt)}</textarea>
       <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>`;
     setboxEl.querySelector(".s-scope").value = cfg.toolScope;
     setboxEl.querySelector(".s-fx").value = cfg.showFx === "off" ? "off" : "on";
