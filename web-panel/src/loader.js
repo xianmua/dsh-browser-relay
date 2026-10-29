@@ -12,6 +12,8 @@ import "../../extension/vendor/purify.min.js"; // UMD 副作用：挂 window.DOM
 const INIT = {}; // mountPanel(init) 每次调用合并进此对象（token/baseURL 等挂载配置），readCfg 时优先于 DEFAULTS
 
 // ---------- DSH 渲染核心（core/dsh-md-core.js）按需加载 ----------
+// 构建期注入包版本（build.mjs define），设置面板展示用；源码直跑时回落 dev
+const PANEL_VERSION = typeof __PANEL_VERSION__ === "string" ? __PANEL_VERSION__ : "dev";
 // react+shiki+katex+ui-primitives 独立成 core 产物，loader 保持轻量；加载失败降级 marked 轻量管线
 let coreApi = null; // 已加载的 core 模块
 let corePromise = null;
@@ -58,36 +60,37 @@ export function mountPanel(init = {}) {
     <style>
       * { box-sizing: border-box; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
       [hidden] { display: none !important; }
-      .ball {
-        position: fixed; right: 28px; bottom: 28px; width: 46px; height: 46px;
-        border-radius: 50%; background: linear-gradient(135deg, #2e2e2e, #101010); color: #fff; border: none;
-        cursor: pointer; font-size: 13px; font-weight: 600; letter-spacing: .5px;
-        box-shadow: 0 6px 16px rgba(0,0,0,.25); z-index: 2147483646; transition: transform .15s ease;
+      /* 最小化态：页面右上角（距右边 100px）的浅灰停靠条，点向下箭头展开右侧栏 */
+      .tab {
+        position: fixed; top: 0; right: 100px; width: 64px; height: 26px; z-index: 2147483646;
+        background: #f0f0f0; color: #888; border: 1px solid #e2e2e2; border-top: none;
+        border-radius: 0 0 8px 8px;
+        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0,0,0,.08); transition: background .15s ease;
       }
-      .ball:hover { transform: scale(1.08); }
+      .tab:hover { background: #e4e4e4; color: #555; }
+      .tab svg { width: 12px; height: 12px; }
       .panel {
-        position: fixed; right: 28px; bottom: 86px; width: 400px; height: 600px;
-        background: #fff; border: 1px solid rgba(0,0,0,.08); border-radius: 12px;
-        box-shadow: 0 12px 32px rgba(0,0,0,.18); z-index: 2147483647;
+        position: fixed; top: 0; right: 0; height: 700px; width: 320px;
+        background: #fff; border-left: 1px solid rgba(0,0,0,.08);
+        box-shadow: -8px 0 24px rgba(0,0,0,.12); z-index: 2147483647;
         display: flex; flex-direction: column; font-size: 14px; color: #333; overflow: hidden;
-        animation: pop .14s ease-out;
+        animation: drop .2s ease-out;
       }
       .panel.dragging { animation: none; user-select: none; }
-      /* 左上角缩放手柄：面板锚定右下角，往左上拖即放大缩小 */
+      /* 左下角缩放手柄：面板锚定右上角，往左拖变宽、往下拖变高（最小 280×400） */
       .grip {
-        position: absolute; top: 0; left: 0; width: 18px; height: 18px; z-index: 5;
-        cursor: nwse-resize; border-radius: 12px 0 8px 0; touch-action: none;
-        background: repeating-linear-gradient(135deg, transparent 0 3px, #ddd 3px 5px);
+        position: absolute; bottom: 0; left: 0; width: 14px; height: 14px; z-index: 5;
+        cursor: nesw-resize; touch-action: none; background: transparent;
       }
-      .grip:hover { background: repeating-linear-gradient(135deg, transparent 0 3px, #b5b5b5 3px 5px); }
-      @keyframes pop {
-        from { opacity: 0; transform: translateY(6px); }
+      .grip:hover { background: rgba(0,0,0,.06); border-radius: 0 0 0 12px; }
+      @keyframes drop {
+        from { opacity: 0; transform: translateY(-48px); }
         to { opacity: 1; transform: none; }
       }
       .header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #f0f0f0; user-select: none;
-        cursor: move; touch-action: none;
       }
       .title { font-size: 14px; font-weight: 600; letter-spacing: .5px; }
       .settings, .collapse, .newchat {
@@ -235,9 +238,10 @@ export function mountPanel(init = {}) {
       .setbox .row2 button { flex: 1; padding: 6px 0; font-size: 13px; border-radius: 6px; cursor: pointer; }
       .setbox .save { border: none; background: #1a1a1a; color: #fff; }
       .setbox .clear { border: 1px solid #ddd; background: #fff; color: #666; }
+      .setbox .diag { margin-top: 8px; color: #bbb; font-size: 11px; }
     </style>
-    <button class="ball" ${isExt ? "hidden" : ""} title="页面 AI 助手">AI</button>
-    <!-- 悬浮球显隐：扩展版初始隐藏（工具栏图标/面板关闭才出现）；页面版默认显示，面板仍收起点球展开 -->
+    <div class="tab" title="展开 AI 助手"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div>
+    <!-- 最小化态即顶部抽屉标签；点箭头展开右侧全高侧栏，最小化按钮收回标签 -->
     <div class="panel" hidden>
       <div class="grip" title="拖拽调整大小"></div>
       <div class="header">
@@ -380,31 +384,62 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
     curThink = null;
     const div = document.createElement("div");
     div.className = isError ? "step err" : md ? "step md" : "step";
+    // 先入列再渲染：async 函数首个 await 前同步执行，若先调 renderMdCore，
+    // core 已预加载时会同步跑完 isConnected 检查（此时 div 还没挂进文档，恒为离场）直接跳过渲染
+    stepsEl.appendChild(div);
     if (md) {
       // 首选：DSH 原版渲染核心（按需加载 core 产物）；失败/不可用降级 marked 轻量管线
-      void renderMdCore(div, text);
+      renderMdCore(div, text).catch((e) => {
+        // 渲染流程自身异常（理论上内部已兜底，此处防漏网之鱼静默丢内容）
+        console.warn("[dsh-assistant] 渲染流程异常，降级 marked：", e);
+        if (div.isConnected && !div.textContent.trim()) renderMdLegacy(div, text);
+      });
     } else div.textContent = text;
-    stepsEl.appendChild(div);
     stepsEl.scrollTop = stepsEl.scrollHeight;
   }
 
   // DSH 渲染核心渲染一步骤（异步等待 core 就绪；div 先入列保证步骤顺序）。
-  // 任何失败路径都保证文本可见：降级 marked，再失败显示原文，绝不静默丢内容
+  // React 渲染是异步调度的，且后台标签页 rAF 会被冻结——所以用 setTimeout 多轮复查
+  // （2s 内每 200ms 一次），内容迟迟不出或事后被清都兜底降级，绝不静默丢内容
   async function renderMdCore(div, text) {
     const core = coreApi ?? (await loadCore());
-    if (!div.isConnected) return; // 新会话已清空
+    if (!div.isConnected) {
+      console.log("[dsh-assistant] 渲染目标已离场（新会话清空？），跳过渲染");
+      return;
+    }
     if (core) {
       try {
         core.renderDshMd(div, text, (specText) => buildGenuiFrame(specText));
-        // React 渲染是异步调度的：下一帧仍无内容说明渲染核心静默失败，降级并显示原因
-        await new Promise((r) => requestAnimationFrame(() => r()));
-        if (!div.isConnected) return;
-        if (!div.textContent.trim()) {
-          const msg = "渲染核心未产出内容（React 渲染空）";
-          console.warn("[dsh-assistant]", msg);
-          renderMdLegacy(div, text);
-          appendRenderNote(div, msg);
+        const deadline = Date.now() + 2000;
+        while (div.isConnected && !div.textContent.trim() && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 200));
         }
+        if (!div.isConnected) {
+          console.warn("[dsh-assistant] 渲染中目标离场（2s 内被移出文档），内容丢弃。", {
+            textLen: text.length,
+          });
+          return;
+        }
+        if (!div.textContent.trim()) {
+          console.warn("[dsh-assistant] 渲染核心 2s 未产出内容，降级 marked。诊断：", {
+            children: div.children.length,
+            htmlLen: div.innerHTML.length,
+          });
+          renderMdLegacy(div, text);
+          appendRenderNote(div, "渲染核心未产出内容，已降级轻量渲染");
+        } else {
+          // 内容出现过又消失（React 迟到崩溃/卸载）：半秒后复查补绘
+          await new Promise((r) => setTimeout(r, 500));
+          if (div.isConnected && !div.textContent.trim()) {
+            console.warn("[dsh-assistant] 渲染核心内容事后丢失，降级重绘。诊断：", {
+              children: div.children.length,
+              htmlLen: div.innerHTML.length,
+            });
+            renderMdLegacy(div, text);
+            appendRenderNote(div, "渲染内容丢失，已降级重绘");
+          }
+        }
+        verifyVisible(div, "core");
         stepsEl.scrollTop = stepsEl.scrollHeight;
         return;
       } catch (e) {
@@ -414,18 +449,44 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
       }
     }
     renderMdLegacy(div, text);
-    await new Promise((r) => requestAnimationFrame(() => r()));
+    await new Promise((r) => setTimeout(r, 200));
     if (div.isConnected && !div.textContent.trim()) {
       // marked 也产出为空：直接显示原文，内容绝不消失
       div.textContent = text;
       appendRenderNote(div, "markdown 渲染为空，已显示原文");
     }
+    verifyVisible(div, "legacy");
   }
   function appendRenderNote(div, msg) {
     const note = document.createElement("div");
     note.className = "render-note";
     note.textContent = `⚠ ${msg}`;
     div.appendChild(note);
+  }
+  // 内容已提交进 DOM 但视觉高度为 0（样式层不可见，控制台无任何报错）：直接在面板上标注并吐诊断，
+  // 避免这种「内容在但看不见」的情况只能靠用户肉眼看空白排查
+  function verifyVisible(div, source) {
+    if (!div.isConnected || !div.textContent.trim() || div.offsetHeight > 0) return;
+    const first = div.firstElementChild;
+    const cs = first ? getComputedStyle(first) : null;
+    const diag = {
+      source,
+      children: div.children.length,
+      textLen: div.textContent.length,
+      offsetHeight: div.offsetHeight,
+      firstChildStyle: cs
+        ? {
+            display: cs.display,
+            visibility: cs.visibility,
+            opacity: cs.opacity,
+            color: cs.color,
+            fontSize: cs.fontSize,
+            height: cs.height,
+          }
+        : null,
+    };
+    console.warn("[dsh-assistant] 内容已渲染但视觉高度为 0（疑似样式不可见）。诊断：", diag);
+    appendRenderNote(div, "内容已渲染但不可见（高度 0），请把控制台 [dsh-assistant] 诊断发我");
   }
 
   // 对齐 DSH web UI：回合结束后把过程步骤（执行/等待/思考）收进可折叠条，突出最终回复
@@ -1471,7 +1532,10 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
       <label>操作范围</label>
       <select class="s-scope"><option value="none">禁用页面操作（仅问答，不触碰页面）</option><option value="browser">仅页面操作工具（推荐）</option><option value="all">开放 DSH 其他插件工具（如接口取数）</option></select>
       <label>自定义 prompt（随任务发给 agent）</label><textarea class="s-prompt" placeholder="对当前业务页的全局要求，如输出格式、固定流程">${esc(cfg.customPrompt)}</textarea>
-      <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>`;
+      <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>
+      <div class="diag">面板 v${esc(PANEL_VERSION)} · 渲染核心${
+        coreApi ? "已加载（DSH 管线）" : corePromise ? "加载中…" : "未加载（降级 marked 轻量渲染）"
+      }</div>`;
     setboxEl.querySelector(".s-scope").value = cfg.toolScope;
     setboxEl.querySelector(".s-fx").value = cfg.showFx === "off" ? "off" : "on";
     setboxEl.hidden = false;
@@ -1513,49 +1577,33 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
     }
   });
 
-  // 面板几何：标题栏拖动位置，左上角手柄缩放（锚定右下角），位置尺寸记忆在 localStorage
+  // 面板几何：顶部右侧停靠（默认高 700px），宽高记忆（左下手柄拖拽调节，最小 280×400），localStorage
   const GEO_KEY = "dshAiPanelGeo";
-  const MIN_W = 320, MIN_H = 400;
+  const MIN_W = 280, MIN_H = 400;
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
   const geo = (() => {
     try { return JSON.parse(localStorage.getItem(GEO_KEY)) || {}; } catch { return {}; }
   })();
-  if (geo.w && geo.h) {
-    panel.style.width = geo.w + "px";
-    panel.style.height = geo.h + "px";
-  }
-  if (geo.left != null && geo.top != null) {
-    panel.style.right = "auto";
-    panel.style.bottom = "auto";
-    panel.style.left = geo.left + "px";
-    panel.style.top = geo.top + "px";
-  }
+  if (geo.w) panel.style.width = clamp(Number(geo.w) || MIN_W, MIN_W, window.innerWidth - MIN_W) + "px";
+  if (geo.h) panel.style.height = clamp(Number(geo.h) || MIN_H, MIN_H, window.innerHeight - 8) + "px";
   const saveGeo = () => {
     const r = panel.getBoundingClientRect();
     try {
-      localStorage.setItem(GEO_KEY, JSON.stringify({
-        w: Math.round(r.width), h: Math.round(r.height),
-        left: Math.round(r.left), top: Math.round(r.top),
-      }));
+      localStorage.setItem(GEO_KEY, JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height) }));
     } catch {}
   };
-  const startDrag = (e, mode) => {
+  const startDrag = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
     const r = panel.getBoundingClientRect();
-    const x0 = e.clientX, y0 = e.clientY, w0 = r.width, h0 = r.height, l0 = r.left, t0 = r.top;
-    const maxW = () => window.innerWidth - 8, maxH = () => window.innerHeight - 8;
+    const w0 = r.width, h0 = r.height, x0 = e.clientX, y0 = e.clientY;
+    const maxW = () => window.innerWidth - MIN_W; // 至少给页面留 280px
+    const maxH = () => window.innerHeight - 8;
     const onMove = (ev) => {
       panel.classList.add("dragging");
-      if (mode === "move") {
-        panel.style.right = "auto";
-        panel.style.bottom = "auto";
-        panel.style.left = clamp(l0 + ev.clientX - x0, 8 - w0, window.innerWidth - 56) + "px";
-        panel.style.top = clamp(t0 + ev.clientY - y0, 0, window.innerHeight - 44) + "px";
-      } else {
-        panel.style.width = clamp(w0 - (ev.clientX - x0), MIN_W, maxW()) + "px";
-        panel.style.height = clamp(h0 - (ev.clientY - y0), MIN_H, maxH()) + "px";
-      }
+      // 左下手柄：往左拖变宽、往下拖变高，面板锚定右上角不动
+      panel.style.width = clamp(w0 + (x0 - ev.clientX), MIN_W, maxW()) + "px";
+      panel.style.height = clamp(h0 + (ev.clientY - y0), MIN_H, maxH()) + "px";
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove, true);
@@ -1566,28 +1614,26 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
     window.addEventListener("mousemove", onMove, true);
     window.addEventListener("mouseup", onUp, true);
   };
-  $(".header").addEventListener("mousedown", (e) => {
-    if (e.target.closest("button")) return; // 标题栏按钮不触发拖动
-    startDrag(e, "move");
-  });
-  $(".grip").addEventListener("mousedown", (e) => startDrag(e, "resize"));
+  $(".grip").addEventListener("mousedown", startDrag);
 
-  const ball = $(".ball");
-  ball.addEventListener("click", () => {
-    ball.hidden = true;
+  const tab = $(".tab");
+  tab.addEventListener("click", () => {
+    tab.hidden = true;
     panel.hidden = false;
     inputEl.focus();
   });
   $(".collapse").addEventListener("click", () => {
     panel.hidden = true;
-    ball.hidden = false;
+    tab.hidden = false;
   });
-  // 扩展版：工具栏图标点击 toggle 面板；页面版无工具栏，悬浮球即唯一切换入口
+  // 扩展版：工具栏图标点击 toggle 侧栏（展开↔收起为顶部标签）；页面版标签即唯一切换入口
   if (isExt) {
     chrome.runtime.onMessage.addListener((msg) => {
       if (msg?.type === "toggle-panel") {
-        panel.hidden = !panel.hidden;
-        if (!panel.hidden) inputEl.focus();
+        const show = panel.hidden;
+        panel.hidden = !show;
+        tab.hidden = show;
+        if (show) inputEl.focus();
       }
     });
   }

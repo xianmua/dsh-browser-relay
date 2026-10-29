@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-relay",
-  "version": "0.5.8",
+  "version": "0.5.16",
   "private": true,
   "description": "DSH 与浏览器之间的通信桥：扩展任务经此在 DSH 创建会话执行，页面操作经 browser_* 工具桥接回扩展",
   "type": "module",
@@ -14,6 +14,7 @@
     "clsx": "^2.1.1",
     "esbuild": "^0.25.0",
     "katex": "^0.19.1",
+    "linkedom": "^0.18.14",
     "mdast-util-from-markdown": "^2.1.0",
     "mdast-util-gfm": "^3.1.0",
     "mdast-util-math": "^3.0.0",

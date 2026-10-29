@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { transformModuleCss } from './core/css-transform.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
+const { version } = JSON.parse(readFileSync(join(HERE, 'package.json'), 'utf8'))
 
 spawnSync(process.execPath, [join(HERE, 'core/gen-styles.mjs')], { stdio: 'inherit' })
 
@@ -39,7 +40,11 @@ const common = {
   target: ['es2020'],
   jsx: 'automatic',
   jsxImportSource: 'react',
-  define: { 'process.env.NODE_ENV': '"production"', __DSHMD_LAZY_LANGS__: 'true' },
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    __DSHMD_LAZY_LANGS__: 'true',
+    __PANEL_VERSION__: JSON.stringify(version), // 面板设置里亮出版本号，排查「改动没生效」
+  },
   alias: {
     // micromark-extension-math 自带了一份不同版本的 katex，统一到同一份避免双倍体积
     katex: join(HERE, 'node_modules/katex'),

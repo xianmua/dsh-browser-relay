@@ -23,4 +23,6 @@ async function save() {
 }
 
 document.getElementById("save").addEventListener("click", save);
+// 扩展版本号亮出来（排查「改了没生效/zip 里版本落后」）
+document.getElementById("ver").textContent = `扩展版本 v${chrome.runtime.getManifest().version}`;
 load();
