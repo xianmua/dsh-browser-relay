@@ -33,5 +33,9 @@
     "bundle": {
       "patch": "./cordis.bundle.yml"
     }
+  },
+  "dependencies": {
+    "micromark-util-decode-string": "^2.0.1",
+    "simple-icons": "^16.36.0"
   }
 }

@@ -72,6 +72,14 @@ export function mountPanel(init = {}) {
         display: flex; flex-direction: column; font-size: 14px; color: #333; overflow: hidden;
         animation: pop .14s ease-out;
       }
+      .panel.dragging { animation: none; user-select: none; }
+      /* 左上角缩放手柄：面板锚定右下角，往左上拖即放大缩小 */
+      .grip {
+        position: absolute; top: 0; left: 0; width: 18px; height: 18px; z-index: 5;
+        cursor: nwse-resize; border-radius: 12px 0 8px 0; touch-action: none;
+        background: repeating-linear-gradient(135deg, transparent 0 3px, #ddd 3px 5px);
+      }
+      .grip:hover { background: repeating-linear-gradient(135deg, transparent 0 3px, #b5b5b5 3px 5px); }
       @keyframes pop {
         from { opacity: 0; transform: translateY(6px); }
         to { opacity: 1; transform: none; }
@@ -79,6 +87,7 @@ export function mountPanel(init = {}) {
       .header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #f0f0f0; user-select: none;
+        cursor: move; touch-action: none;
       }
       .title { font-size: 14px; font-weight: 600; letter-spacing: .5px; }
       .settings, .collapse, .newchat {
@@ -219,13 +228,14 @@ export function mountPanel(init = {}) {
     <button class="ball" ${isExt ? "hidden" : ""} title="页面 AI 助手">AI</button>
     <!-- 悬浮球显隐：扩展版初始隐藏（工具栏图标/面板关闭才出现）；页面版默认显示，面板仍收起点球展开 -->
     <div class="panel" hidden>
+      <div class="grip" title="拖拽调整大小"></div>
       <div class="header">
         <span class="title">页面 AI 助手</span>
         <span>
           <button class="newchat" title="开新会话（断开当前任务，下一条输入将新建任务）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <button class="settings" title="设置（Relay 地址 / Token / 工作区 / 工具范围 / 自定义 prompt）">
+          <button class="settings" title="设置（Relay 地址 / Token / 工作区 / 操作范围 / 自定义 prompt）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
           <button class="collapse" title="最小化">
@@ -1386,8 +1396,8 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
       <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区">
       <label>操作轨迹（页面模拟光标与点击特效）</label>
       <select class="s-fx"><option value="on">是 = 显示模拟光标与点击特效</option><option value="off">否 = 静默执行不展示</option></select>
-      <label>工具范围</label>
-      <select class="s-scope"><option value="browser">browser = 仅页面操作工具</option><option value="all">all = 开放其他插件工具</option></select>
+      <label>操作范围</label>
+      <select class="s-scope"><option value="none">禁用页面操作（仅问答，不触碰页面）</option><option value="browser">仅页面操作工具（推荐）</option><option value="all">开放 DSH 其他插件工具（如接口取数）</option></select>
       <label>自定义 prompt（随任务发给 agent）</label><textarea class="s-prompt" placeholder="对当前业务页的全局要求，如输出格式、固定流程">${esc(cfg.customPrompt)}</textarea>
       <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>`;
     setboxEl.querySelector(".s-scope").value = cfg.toolScope;
@@ -1430,6 +1440,65 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
       run();
     }
   });
+
+  // 面板几何：标题栏拖动位置，左上角手柄缩放（锚定右下角），位置尺寸记忆在 localStorage
+  const GEO_KEY = "dshAiPanelGeo";
+  const MIN_W = 320, MIN_H = 400;
+  const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+  const geo = (() => {
+    try { return JSON.parse(localStorage.getItem(GEO_KEY)) || {}; } catch { return {}; }
+  })();
+  if (geo.w && geo.h) {
+    panel.style.width = geo.w + "px";
+    panel.style.height = geo.h + "px";
+  }
+  if (geo.left != null && geo.top != null) {
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+    panel.style.left = geo.left + "px";
+    panel.style.top = geo.top + "px";
+  }
+  const saveGeo = () => {
+    const r = panel.getBoundingClientRect();
+    try {
+      localStorage.setItem(GEO_KEY, JSON.stringify({
+        w: Math.round(r.width), h: Math.round(r.height),
+        left: Math.round(r.left), top: Math.round(r.top),
+      }));
+    } catch {}
+  };
+  const startDrag = (e, mode) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const r = panel.getBoundingClientRect();
+    const x0 = e.clientX, y0 = e.clientY, w0 = r.width, h0 = r.height, l0 = r.left, t0 = r.top;
+    const maxW = () => window.innerWidth - 8, maxH = () => window.innerHeight - 8;
+    const onMove = (ev) => {
+      panel.classList.add("dragging");
+      if (mode === "move") {
+        panel.style.right = "auto";
+        panel.style.bottom = "auto";
+        panel.style.left = clamp(l0 + ev.clientX - x0, 8 - w0, window.innerWidth - 56) + "px";
+        panel.style.top = clamp(t0 + ev.clientY - y0, 0, window.innerHeight - 44) + "px";
+      } else {
+        panel.style.width = clamp(w0 - (ev.clientX - x0), MIN_W, maxW()) + "px";
+        panel.style.height = clamp(h0 - (ev.clientY - y0), MIN_H, maxH()) + "px";
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove, true);
+      window.removeEventListener("mouseup", onUp, true);
+      setTimeout(() => panel.classList.remove("dragging"), 0);
+      saveGeo();
+    };
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("mouseup", onUp, true);
+  };
+  $(".header").addEventListener("mousedown", (e) => {
+    if (e.target.closest("button")) return; // 标题栏按钮不触发拖动
+    startDrag(e, "move");
+  });
+  $(".grip").addEventListener("mousedown", (e) => startDrag(e, "resize"));
 
   const ball = $(".ball");
   ball.addEventListener("click", () => {

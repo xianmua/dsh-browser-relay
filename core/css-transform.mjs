@@ -30,12 +30,14 @@ export function transformModuleCss(css, fileBase) {
 
 /**
  * 主题 token 表（design-platform.css / shiki.css）的 shadow DOM 适配：
- * - `body {` → `:host {`（token 挂到 host，var() 链在同作用域内解析）
+ * - `body {` / `:root {` → `:host {`（token 挂到 host，var() 链在同作用域内解析；
+ *   :root 在 shadow tree 中不匹配任何元素，必须一并改写）
  * - 暗色块选择器换成永不匹配的 `:host([data-ds-dark-theme])`（面板仅浅色）
  * @param {string} css
  */
 export function adaptTokenSheet(css) {
   return css
     .replace(/(^|\n)(\s*)body(\s*\{)/g, '$1$2:host$3')
+    .replace(/(^|\n)(\s*):root(\s*\{)/g, '$1$2:host$3')
     .replace(/body\[data-ds-dark-theme\]/g, ':host([data-ds-dark-theme])')
 }
