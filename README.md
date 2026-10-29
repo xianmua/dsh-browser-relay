@@ -36,10 +36,11 @@ dsh web
 <script src="/your-proxy/dsh-assistant.min.js"
         data-base-url="/your-proxy"
         data-token="向导页复制的口令"
-        data-workspace="D:\工作区"></script>
+        data-workspace="D:\工作区"
+        data-ai-level="L3"></script>
 ```
 
-- 属性优先级：设置面板本机覆盖 > `data-*` 注入 > 默认值；`data-workspace` 可省（留空则会话不分组）
+- 属性优先级：设置面板本机覆盖 > `data-*` 注入 > 默认值；`data-workspace` 可省（留空则会话不分组）；`data-ai-level` 可省（智能等级 L1-L5 或 none/read/browser/browserFx/all，默认 L3 页面操作·静默）
 - 由 relay 托管面板脚本（IIFE 打包产物，仓库内 `panel/` 目录），连 `npm install` 都不用；relay 更新后刷新页面即拿到新版
 - 也可省略 `data-token`，由页面 JS 调 `DshAssistant.mountPanel({ baseURL, apiKey, workspace })` 手动挂载
 - 面板与扩展**单一源码**（`web-panel/src/`，经 env.js 适配层 + esbuild 双构建）；改码后 `npm run build` 一次产出 `panel/dsh-assistant.min.js` 与 `extension/content/loader.js`
@@ -128,8 +129,15 @@ netsh advfirewall firewall add rule name="dsh-browser-relay" dir=in action=allow
 
 - `9916` 端口有鉴权口令门禁（每机自动生成，仅存本机 `~/.dsh/browser-relay-token`），防止本机其他网页冒用；向导页不含 CORS 头，外部网页读不到口令
 - 口令随扩展 zip 一起写入扩展目录——zip 与解压目录都只在本机使用，不要分发给他人（对方机器口令不匹配，本来也用不了）
-- 扩展设置页可改「Relay 地址」「Relay Token」「工作区」「操作轨迹」「操作范围」（均留空/默认用注入值；连远程机器且口令不一致时在设置页填远程口令即可），新 key 隔离防旧版残留
-- 「操作轨迹」可选是否在页面上展示模拟光标与点击特效（默认展示；选「否」后工具静默执行，立即生效）
+- 扩展设置页可改「Relay 地址」「Relay Token」「工作区」「智能等级」（均留空/默认用注入值；连远程机器且口令不一致时在设置页填远程口令即可），新 key 隔离防旧版残留
+- 智能等级五档：L1 仅问答（不触碰页面）/ L2 当前页面只读 / L3 页面操作·静默执行（默认推荐）/ L4 AI 操作演示（模拟光标+点击特效）/ L5 DSH 全量放开；档位在执行层硬拦截，越权工具调用直接拒绝
+
+## 版本 0.5.32 变更摘要
+
+- 「智能等级」五档落地（原「工具范围/操作范围」演进），特效开关并入档位：仅 L4 展示模拟光标与点击特效，其余档位静默执行，独立「操作轨迹」配置移除
+- 配置键 `toolScope` 更名 `aiLevel`（含 chrome.storage / localStorage 存储键与 /task payload 字段），页面版新增 `data-ai-level` script 标签入参（接受 L1-L5 或内部档位值）
+- 扩展 content script 移除 highlight/marked/purify 三个 vendor 预加载（构建产物已内联，每页减少约 180KB 重复解析）
+- 停靠标签与缩放手柄视觉强化：手柄默认显示斜纹拉丝，标签阴影悬浮感增强；死代码清理（env.config 死字段、重复选择器与去重逻辑合并）
 
 ## 版本 0.5.8 变更摘要
 

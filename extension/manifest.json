@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "dsh-browser-plugin",
-  "version": "0.5.23",
+  "version": "0.5.32",
   "description": "企业 Web AI 助手：悬浮窗提交任务，经本地 relay 在 DSH 创建会话执行",
   "background": {
     "service_worker": "background.js"
@@ -15,7 +15,7 @@
     },
     {
       "matches": ["<all_urls>"],
-      "js": ["config.js", "vendor/highlight.min.js", "vendor/marked.min.js", "vendor/purify.min.js", "content/loader.js"],
+      "js": ["config.js", "content/loader.js"],
       "run_at": "document_idle"
     }
   ],

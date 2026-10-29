@@ -62,13 +62,13 @@ export function mountPanel(init = {}) {
       [hidden] { display: none !important; }
       /* 最小化态：页面右上角（距右边 100px）的浅灰停靠条，点向下箭头展开右侧栏 */
       .tab {
-        position: fixed; top: 0; right: 100px; width: 64px; height: 26px; z-index: 2147483646;
+        position: fixed; top: 0; right: 100px; width: 76px; height: 22px; z-index: 2147483646;
         background: #f0f0f0; color: #888; border: 1px solid #e2e2e2; border-top: none;
         border-radius: 0 0 8px 8px;
         display: flex; align-items: center; justify-content: center; cursor: pointer;
-        box-shadow: 0 2px 6px rgba(0,0,0,.08); transition: background .15s ease;
+        box-shadow: 0 4px 12px rgba(0,0,0,.18); transition: background .15s ease, box-shadow .15s ease;
       }
-      .tab:hover { background: #e4e4e4; color: #555; }
+      .tab:hover { background: #e4e4e4; color: #555; box-shadow: 0 6px 16px rgba(0,0,0,.24); }
       .tab svg { width: 12px; height: 12px; }
       .panel {
         position: fixed; top: 0; right: 0; height: 700px; width: 380px;
@@ -80,10 +80,11 @@ export function mountPanel(init = {}) {
       .panel.dragging { animation: none; user-select: none; }
       /* 左下角缩放手柄：面板锚定右上角，往左拖变宽、往下拖变高（最小 380×400） */
       .grip {
-        position: absolute; bottom: 0; left: 0; width: 14px; height: 14px; z-index: 5;
-        cursor: nesw-resize; touch-action: none; background: transparent;
+        position: absolute; bottom: 0; left: 0; width: 18px; height: 18px; z-index: 5;
+        cursor: nesw-resize; touch-action: none; border-radius: 0 0 0 12px;
+        background: repeating-linear-gradient(135deg, transparent 0 4px, #d4d4d4 4px 6px);
       }
-      .grip:hover { background: rgba(0,0,0,.06); border-radius: 0 0 0 12px; }
+      .grip:hover { background: repeating-linear-gradient(135deg, transparent 0 4px, #a8a8a8 4px 6px); }
       @keyframes drop {
         from { opacity: 0; transform: translateY(-48px); }
         to { opacity: 1; transform: none; }
@@ -250,7 +251,7 @@ export function mountPanel(init = {}) {
           <button class="newchat" title="开新会话（断开当前任务，下一条输入将新建任务）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <button class="settings" title="设置（Relay 地址 / Token / 工作区 / 操作范围 / 自定义 prompt）">
+          <button class="settings" title="设置（Relay 地址 / Token / 工作区 / 智能等级 / 自定义 prompt）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           </button>
           <button class="collapse" title="最小化">
@@ -633,9 +634,8 @@ ${assetScripts}
     cfg.baseURL = o.baseURL || cfg.baseURL;
     cfg.apiKey = o.token || cfg.apiKey;
     cfg.customPrompt = o.customPrompt || cfg.customPrompt;
-    cfg.toolScope = o.toolScope || cfg.toolScope;
+    cfg.aiLevel = o.aiLevel || cfg.aiLevel;
     cfg.workspace = o.workspace || cfg.workspace;
-    cfg.showFx = o.showFx || cfg.showFx; // 操作轨迹特效开关（on/off）
     return cfg;
   }
   async function api(path, opts = {}) {
@@ -752,12 +752,12 @@ ${assetScripts}
     }
     return loose;
   }
+  // 打开中的下拉浮层选择器（Element Plus 隐藏面板 aria-hidden=true；antd hidden class）
+  const OPEN_POPPER = '.el-popper[aria-hidden="false"], .ant-select-dropdown:not(.ant-select-dropdown-hidden)';
   // 优先当前激活面板（Element Plus 隐藏面板 aria-hidden=true；antd hidden class），找不到再全局兜底
   function findDropdownOption(text) {
     const target = normText(text);
-    const active = document.querySelectorAll(
-      '.el-popper[aria-hidden="false"], .ant-select-dropdown:not(.ant-select-dropdown-hidden)',
-    );
+    const active = document.querySelectorAll(OPEN_POPPER);
     for (const scope of active) {
       const hit = findOptionIn(scope, target);
       if (hit) return hit;
@@ -788,9 +788,7 @@ ${assetScripts}
   }
   // 兜底：面板第一个可见选项（优先激活面板类名行，未知库取新增可见叶子）
   function pickFirstOption(before) {
-    const active = document.querySelectorAll(
-      '.el-popper[aria-hidden="false"], .ant-select-dropdown:not(.ant-select-dropdown-hidden)',
-    );
+    const active = document.querySelectorAll(OPEN_POPPER);
     const sel =
       '.el-select-dropdown__item,.el-cascader-node,.el-dropdown-menu__item,.ant-select-item,.ant-dropdown-menu-item,li[class*="option"]';
     for (const scope of active.length ? active : [document]) {
@@ -821,7 +819,7 @@ ${assetScripts}
   // 残留浮层收口：上轮失败的旧面板不关，下轮 get_state 会让面板选项占索引（漂移）且两面板并存匹配串台
   function closeLeftoverPoppers() {
     const active = document.querySelector(
-      '.el-popper[aria-hidden="false"], .ant-select-dropdown:not(.ant-select-dropdown-hidden), .el-picker-panel, .el-cascader__dropdown',
+      OPEN_POPPER + ", .el-picker-panel, .el-cascader__dropdown",
     );
     if (!active) return false;
     for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"])
@@ -942,8 +940,8 @@ ${assetScripts}
 
   async function runTool(tool, args) {
     const c = await ensureController();
-    // 操作轨迹特效：设置选「否」时不展示模拟光标（ hideMask 兜底收掉已展示的）
-    const wantFx = (await readCfg()).showFx !== "off";
+    // 操作轨迹特效：L4（AI 操作演示）档位开启模拟光标，其余档位静默执行（hideMask 兜底收掉已展示的）
+    const wantFx = (await readCfg()).aiLevel === "browserFx";
     try {
       if (wantFx) await c.showMask();
       else await c.hideMask();
@@ -1392,7 +1390,7 @@ ${assetScripts}
     turnStartMs = Date.now(); // 新任务回合起点（操作条据此显示回合耗时）
     sessionStorage.setItem("dshAiTurnStart", String(turnStartMs));
     try {
-      const { customPrompt, toolScope, workspace } = await readCfg();
+      const { customPrompt, aiLevel, workspace } = await readCfg();
       const d = await api("/task", {
         method: "POST",
         body: JSON.stringify({
@@ -1401,7 +1399,7 @@ ${assetScripts}
           title: document.title,
           pageKey: pageKey(),
           customPrompt: customPrompt || "",
-          toolScope: toolScope || "browser",
+          aiLevel: aiLevel || "browser",
           workspace: workspace || "",
           tabKey,
         }),
@@ -1541,17 +1539,14 @@ ${assetScripts}
       <label>Relay 地址</label><input class="s-url" value="${esc(cfg.baseURL)}">
       <label>Relay Token</label><input class="s-token" value="${esc(cfg.apiKey)}">
       <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区">
-      <label>操作轨迹（页面模拟光标与点击特效）</label>
-      <select class="s-fx"><option value="on">是 = 显示模拟光标与点击特效</option><option value="off">否 = 静默执行不展示</option></select>
-      <label>操作范围</label>
-      <select class="s-scope"><option value="none">禁用页面操作（仅问答，不触碰页面）</option><option value="browser">仅页面操作工具（推荐）</option><option value="all">开放 DSH 其他插件工具（如接口取数）</option></select>
+      <label>智能等级</label>
+      <select class="s-scope"><option value="none">L1：仅问答（不触碰页面）</option><option value="read">L2：当前页面只读模式</option><option value="browser">L3：当前页面操作·静默执行（推荐）</option><option value="browserFx">L4：AI 操作演示（模拟光标+点击特效）</option><option value="all">L5：DSH 全量放开</option></select>
       <label>自定义 prompt（随任务发给 agent）</label><textarea class="s-prompt" placeholder="对当前业务页的全局要求，如输出格式、固定流程">${esc(cfg.customPrompt)}</textarea>
       <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>
       <div class="diag">面板 v${esc(PANEL_VERSION)} · 渲染核心${
         coreApi ? "已加载（DSH 管线）" : corePromise ? "加载中…" : "未加载（降级 marked 轻量渲染）"
       }</div>`;
-    setboxEl.querySelector(".s-scope").value = cfg.toolScope;
-    setboxEl.querySelector(".s-fx").value = cfg.showFx === "off" ? "off" : "on";
+    setboxEl.querySelector(".s-scope").value = cfg.aiLevel;
     setboxEl.hidden = false;
     // 保存即写配置覆盖（扩展=chrome.storage / 页面=localStorage，readCfg 每次请求现读，下个任务即生效）；留空 = 移除该项覆盖
     setboxEl.querySelector(".save").addEventListener("click", async () => {
@@ -1560,8 +1555,7 @@ ${assetScripts}
         baseURL: v(".s-url"),
         token: v(".s-token"),
         workspace: v(".s-ws"),
-        showFx: v(".s-fx"),
-        toolScope: v(".s-scope"),
+        aiLevel: v(".s-scope"),
         customPrompt: v(".s-prompt"),
       });
       setboxEl.hidden = true;

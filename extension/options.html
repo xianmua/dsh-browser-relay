@@ -88,12 +88,15 @@
       <input id="workspace" placeholder="/绝对路径/到/工作区" />
     </div>
     <div class="field">
-      <label for="toolScope"
-        >操作范围（默认仅页面操作工具，防止模型乱调研；开放后 DSH 其他插件工具也可用）</label
+      <label for="aiLevel"
+        >智能等级（L3 默认，防止模型乱调研；L2 只读不能动页面，L4 带 AI 操作演示特效，L5 开放 DSH 其他插件工具）</label
       >
-      <select id="toolScope">
-        <option value="browser">仅页面操作工具（推荐）</option>
-        <option value="all">开放 DSH 其他插件工具（如接口取数）</option>
+      <select id="aiLevel">
+        <option value="none">L1：仅问答（不触碰页面）</option>
+        <option value="read">L2：当前页面只读模式</option>
+        <option value="browser">L3：当前页面操作·静默执行（推荐）</option>
+        <option value="browserFx">L4：AI 操作演示（模拟光标+点击特效）</option>
+        <option value="all">L5：DSH 全量放开</option>
       </select>
     </div>
     <div class="field">
