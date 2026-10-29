@@ -71,14 +71,14 @@ export function mountPanel(init = {}) {
       .tab:hover { background: #e4e4e4; color: #555; }
       .tab svg { width: 12px; height: 12px; }
       .panel {
-        position: fixed; top: 0; right: 0; height: 700px; width: 320px;
+        position: fixed; top: 0; right: 0; height: 700px; width: 380px;
         background: #fff; border-left: 1px solid rgba(0,0,0,.08);
         box-shadow: -8px 0 24px rgba(0,0,0,.12); z-index: 2147483647;
         display: flex; flex-direction: column; font-size: 14px; color: #333; overflow: hidden;
         animation: drop .2s ease-out;
       }
       .panel.dragging { animation: none; user-select: none; }
-      /* 左下角缩放手柄：面板锚定右上角，往左拖变宽、往下拖变高（最小 280×400） */
+      /* 左下角缩放手柄：面板锚定右上角，往左拖变宽、往下拖变高（最小 380×400） */
       .grip {
         position: absolute; bottom: 0; left: 0; width: 14px; height: 14px; z-index: 5;
         cursor: nesw-resize; touch-action: none; background: transparent;
@@ -306,8 +306,9 @@ export function mountPanel(init = {}) {
     });
   }
   // ---------- GenUI（```dsh-ui 围栏，@changfenhuang/dsh-genui 插件）----------
-  // runtime 由 DSH webserver 的 /plugins/.../assets/standalone-runtime.js 提供，面板 sandbox iframe 内渲染；
-  // 需要按需引擎（echart/mermaid/scene3d）时由 runtime 自行回退，声明式组件（布局/展示/chart/本地交互）全保真
+  // runtime 与预装资产由 relay 的 /plugins/@changfenhuang/dsh-genui/assets/ 提供（vendor 自 npm 0.15.0），
+  // 面板 sandbox iframe 内渲染；echarts 图表/声明式组件（布局/展示/chart/本地交互）全保真，
+  // mermaid/scene3d/map 按 spec 关键词懒加载对应资产，缺失时 runtime 自行降级提示
   let relayBase = ""; // api() 每次刷新，addStep 渲染 GenUI iframe 时引用
   function buildGenuiFrame(specText) {
     let spec;
@@ -318,13 +319,26 @@ export function mountPanel(init = {}) {
     }
     if (!spec || typeof spec !== "object" || !Array.isArray(spec.items)) return null;
     const locale = (navigator.language || "zh").toLowerCase().startsWith("zh") ? "zh" : "en";
+    const base = `${relayBase}/plugins/@changfenhuang/dsh-genui/assets`;
+    const s = specText; // 关键词命中才加载重型引擎资产（mermaid 3.4MB/three/maplibre）
+    const assetScripts = [
+      "icons",
+      "echarts-core",
+      "echarts-full",
+      ...(s.includes("mermaid") ? ["mermaid"] : []),
+      ...(s.includes("three") || s.includes("scene3d") ? ["three"] : []),
+      ...(s.includes("maplibre") || s.includes('"map"') ? ["maplibre"] : []),
+      "standalone-runtime",
+    ]
+      .map((n) => `<script src="${base}/${n}.js"><\/script>`)
+      .join("\n");
     const boot = `<!doctype html><html><head><meta charset="utf-8"><style>
 html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 #genui-root{padding:8px}
 #genui-err{display:none;padding:8px;font-size:12px;color:#8a8f99}
 </style></head><body>
 <div id="genui-root"></div><div id="genui-err"></div>
-<script src="${relayBase}/plugins/@changfenhuang/dsh-genui/assets/standalone-runtime.js"><\/script>
+${assetScripts}
 <script>
 (function(){
   var spec = ${JSON.stringify(spec).replace(/</g, "\\u003c")};
@@ -338,7 +352,7 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
     report();
   }
   try{
-    if(!window.__GenuiStandalone__) return fail("runtime 未加载，需安装 genui 插件");
+    if(!window.__GenuiStandalone__) return fail("runtime 未加载，请确认 relay 已启动");
     window.__GenuiStandalone__.mount(root,{format:"dsh-genui",version:1,spec:spec,presentation:{locale:${JSON.stringify(locale)},theme:"light"}});
     new MutationObserver(function(){ setTimeout(report,60); }).observe(document.body,{subtree:true,childList:true});
     setTimeout(report,300);
@@ -1246,8 +1260,8 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
         }
         if (d.statusText) {
           setStatus(d.statusText);
-          // 回合终态（已完成/已失败）：把本轮过程步骤收进折叠条，对齐 DSH web UI；新回合开始时重置
-          const done = /^(已完成|已失败)/.test(d.statusText);
+          // 回合终态（已完成/已失败/任务失败/会话模式回合结束）：把本轮过程步骤收进折叠条，对齐 DSH web UI；新回合开始时重置
+          const done = /已完成|已失败|任务失败|对话中（可继续输入）|对话中（上一回合异常）/.test(d.statusText);
           if (done && !procCollapsed) {
             procCollapsed = true;
             collapseProcess();
@@ -1577,9 +1591,9 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
     }
   });
 
-  // 面板几何：顶部右侧停靠（默认高 700px），宽高记忆（左下手柄拖拽调节，最小 280×400），localStorage
+  // 面板几何：顶部右侧停靠（默认宽 380px、高 700px），宽高记忆（左下手柄拖拽调节，最小 380×400），localStorage
   const GEO_KEY = "dshAiPanelGeo";
-  const MIN_W = 280, MIN_H = 400;
+  const MIN_W = 380, MIN_H = 400;
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
   const geo = (() => {
     try { return JSON.parse(localStorage.getItem(GEO_KEY)) || {}; } catch { return {}; }
@@ -1597,7 +1611,7 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
     e.preventDefault();
     const r = panel.getBoundingClientRect();
     const w0 = r.width, h0 = r.height, x0 = e.clientX, y0 = e.clientY;
-    const maxW = () => window.innerWidth - MIN_W; // 至少给页面留 280px
+    const maxW = () => window.innerWidth - MIN_W; // 至少给页面留 380px
     const maxH = () => window.innerHeight - 8;
     const onMove = (ev) => {
       panel.classList.add("dragging");
