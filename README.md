@@ -132,7 +132,7 @@ netsh advfirewall firewall add rule name="dsh-browser-relay" dir=in action=allow
 - 扩展设置页可改「Relay 地址」「Relay Token」「工作区」「智能等级」（均留空/默认用注入值；连远程机器且口令不一致时在设置页填远程口令即可），新 key 隔离防旧版残留
 - 智能等级五档：L1 仅问答（不触碰页面）/ L2 当前页面只读 / L3 页面操作·静默执行（默认推荐）/ L4 AI 操作演示（模拟光标+点击特效）/ L5 DSH 全量放开；档位在执行层硬拦截，越权工具调用直接拒绝
 
-## 版本 0.5.32 变更摘要
+## 版本 0.6.0 变更摘要
 
 - 「智能等级」五档落地（原「工具范围/操作范围」演进），特效开关并入档位：仅 L4 展示模拟光标与点击特效，其余档位静默执行，独立「操作轨迹」配置移除
 - 配置键 `toolScope` 更名 `aiLevel`（含 chrome.storage / localStorage 存储键与 /task payload 字段），页面版新增 `data-ai-level` script 标签入参（接受 L1-L5 或内部档位值）
