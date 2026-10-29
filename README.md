@@ -1,5 +1,7 @@
 # dsh-browser-relay
 
+<img src="docs/panel.png" width="300" alt="页面 AI 助手悬浮窗面板">
+
 DSH 与浏览器之间的通信桥（cordis 插件，零第三方依赖）。浏览器扩展面板提交的每个任务都经 relay 在 DSH 里创建**真实会话**（`~/.dsh/sessions`，dsh web UI 会话列表可见、可追问），由 DSH agent 接管执行；页面操作通过 relay 注册的 `browser_*` 工具桥接回扩展（命令入队 → 扩展长轮询取走 → PageController 执行 → 回传）。模型与网关沿用 DSH 自身配置，relay 不碰 LLM。鉴权统一 relay token，扩展 zip 下载时自动写入本机口令（零配置）。
 
 ## 用户安装（无需 git / 无需 node / 不碰任何源码目录）

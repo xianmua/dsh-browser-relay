@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-browser-relay — 让 DSH 操作你的浏览器</title>
+<meta name="description" content="DSH 与浏览器之间的通信桥：浏览器扩展提交任务，经本地 relay 在 DSH 创建真实会话执行，页面操作经 browser_* 工具桥接回浏览器。">
+<style>
+  :root {
+    --ink: #1a1f2e; --sub: #5a6478; --line: #e6e9f0;
+    --accent: #4b5cc4; --accent-soft: #eef0fa;
+    --bg: #fafbfd; --card: #ffffff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    color: var(--ink); background: var(--bg); line-height: 1.7;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+
+  /* header */
+  header { padding: 72px 0 56px; border-bottom: 1px solid var(--line); }
+  .tag { display: inline-block; font-size: 12px; color: var(--accent); background: var(--accent-soft);
+    border-radius: 999px; padding: 2px 12px; letter-spacing: 1px; margin-bottom: 16px; }
+  h1 { font-size: 34px; letter-spacing: .5px; }
+  h1 code { font-size: inherit; color: var(--accent); }
+  .lead { margin-top: 14px; font-size: 16.5px; color: var(--sub); max-width: 720px; }
+  .cta { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { display: inline-block; padding: 10px 22px; border-radius: 8px; font-size: 14.5px;
+    text-decoration: none; border: 1px solid var(--line); color: var(--ink); background: var(--card); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:hover { opacity: .88; }
+
+  /* sections */
+  section { padding: 48px 0; border-bottom: 1px solid var(--line); }
+  h2 { font-size: 21px; margin-bottom: 20px; }
+  p.desc { color: var(--sub); margin-bottom: 18px; }
+
+  /* flow diagram */
+  .flow { display: flex; align-items: stretch; gap: 0; flex-wrap: wrap; margin: 8px 0 6px; }
+  .node { flex: 1; min-width: 150px; background: var(--card); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px; }
+  .node b { display: block; font-size: 14.5px; }
+  .node span { font-size: 12.5px; color: var(--sub); }
+  .arrow { align-self: center; padding: 0 10px; color: var(--accent); font-size: 18px; }
+  .flow-note { font-size: 13px; color: var(--sub); margin-top: 10px; }
+
+  /* level table */
+  table { width: 100%; border-collapse: collapse; background: var(--card); font-size: 14px; }
+  th, td { border: 1px solid var(--line); padding: 10px 14px; text-align: left; vertical-align: top; }
+  th { background: var(--accent-soft); font-weight: 600; white-space: nowrap; }
+  td.lv { white-space: nowrap; font-weight: 600; color: var(--accent); }
+  td small { color: var(--sub); }
+
+  /* steps */
+  ol.steps { list-style: none; counter-reset: s; }
+  ol.steps li { counter-increment: s; position: relative; padding: 10px 0 10px 52px; }
+  ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 10px;
+    width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 600; }
+  ol.steps b { font-size: 15px; }
+  ol.steps .detail { color: var(--sub); font-size: 13.5px; margin-top: 2px; }
+  code { background: #eef1f6; border-radius: 4px; padding: 1px 6px; font-size: .92em; }
+  pre { background: #1e2433; color: #dce3f2; border-radius: 10px; padding: 16px 20px;
+    overflow-x: auto; font-size: 13px; line-height: 1.6; margin: 12px 0; }
+  pre code { background: none; padding: 0; color: inherit; }
+
+  /* feature grid */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; }
+  .card b { display: block; margin-bottom: 6px; font-size: 14.5px; }
+  .card span { font-size: 13.5px; color: var(--sub); }
+
+  footer { padding: 32px 0 48px; color: var(--sub); font-size: 13px; text-align: center; }
+  footer a { color: var(--accent); }
+  .shot-frame { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+  .shot-frame img { width: 300px; border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(26, 31, 46, .12); }
+  @media (max-width: 640px) { header { padding: 48px 0 36px; } h1 { font-size: 26px; } .arrow { transform: rotate(90deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <span class="tag">DSH 插件 · 零第三方依赖</span>
+    <h1><code>dsh-browser-relay</code></h1>
+    <p class="lead">DSH 与浏览器之间的通信桥。浏览器扩展面板提交的每个任务，都经本地 relay 在 DSH 里创建<b>真实会话</b>（dsh web UI 会话列表可见、可追问），由 DSH agent 接管执行；页面操作通过 <code>browser_*</code> 工具桥接回浏览器执行。模型与网关沿用 DSH 自身配置，relay 不碰 LLM。</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/xianmua/dsh-browser-relay">GitHub 仓库</a>
+      <a class="btn" href="https://github.com/xianmua/dsh-browser-relay#用户安装无需-git--无需-node--不碰任何源码目录">安装文档</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>界面预览</h2>
+    <div class="shot-frame">
+      <img src="docs/panel-task.png" alt="面板执行任务：读取页面数据并渲染统计图表" loading="lazy">
+      <img src="docs/panel.png" alt="页面 AI 助手悬浮窗面板" loading="lazy">
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>工作原理</h2>
+    <div class="flow">
+      <div class="node"><b>浏览器扩展 / 悬浮窗</b><span>任意网页提交任务、展示执行过程</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>本地 relay</b><span>鉴权、智能等级拦截、任务下发</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>DSH 会话</b><span>真实会话执行，模型沿用 DSH 配置</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><b>browser_* 工具</b><span>命令经长轮询回浏览器，PageController 执行</span></div>
+    </div>
+    <p class="flow-note">口令随扩展 zip 自动写入（零配置）；渲染与 DSH web UI 同源（markdown / 代码高亮 / 表格 / 公式 / GenUI 图表）。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>五档智能等级</h2>
+    <p class="desc">档位在执行层硬拦截，越权工具调用直接拒绝；L4 才有模拟光标与点击特效，其余档位静默执行、人机可同时操作页面。</p>
+    <table>
+      <tr><th>档位</th><th>名称</th><th>行为边界</th></tr>
+      <tr><td class="lv">L1</td><td>仅问答</td><td>不触碰页面，纯问答；<small>适合知识类问题，响应最快</small></td></tr>
+      <tr><td class="lv">L2</td><td>当前页面只读</td><td>只读查看页面内容，禁止任何修改；<small>适合「这个页面讲了什么」</small></td></tr>
+      <tr><td class="lv">L3</td><td>页面操作 · 静默</td><td>开放页面操作工具，静默执行（默认推荐）</td></tr>
+      <tr><td class="lv">L4</td><td>AI 操作演示</td><td>在 L3 基础上叠加模拟光标与点击特效，直观看到 AI 在做什么</td></tr>
+      <tr><td class="lv">L5</td><td>DSH 全量放开</td><td>开放 DSH 其他插件工具，能力上限最高</td></tr>
+    </table>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>三步安装</h2>
+    <ol class="steps">
+      <li>
+        <b>安装 relay 插件</b>
+        <div class="detail">前提：本机已安装并登录 DSH。<code>dsh plugin --profile web add git+&lt;插件仓库地址&gt;</code></div>
+      </li>
+      <li>
+        <b>启动 DSH</b>
+        <div class="detail"><code>dsh web</code> —— relay 随之启动，并自动生成本机口令。</div>
+      </li>
+      <li>
+        <b>浏览器装载扩展</b>
+        <div class="detail">打开向导页 <code>http://127.0.0.1:9916/</code> 下载扩展 zip 并解压 → <code>edge://extensions</code> 开「开发人员模式」→「加载解压缩的扩展」→ 点工具栏「页面 AI 助手」图标即用。</div>
+      </li>
+    </ol>
+    <p class="desc">无需 git / 无需 node / 不碰源码；口令与端点在下载时自动写入 zip，加载即用。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>接入自家业务系统（免装扩展）</h2>
+    <p class="desc">业务页面 header 加一行 script 即可挂载同款悬浮窗，用户零配置：</p>
+<pre><code>&lt;script src="http://127.0.0.1:9916/dsh-assistant.min.js"
+        data-token="向导页复制的口令"
+        data-workspace="D:\工作区"
+        data-ai-level="L3"&gt;&lt;/script&gt;</code></pre>
+    <p class="desc">支持经后端代理接入、<code>data-*</code> 属性注入默认档位与工作区、<code>DshAssistant.mountPanel()</code> 手动挂载；面板脚本由 relay 托管，relay 更新后刷新页面即拿到新版。</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>特性</h2>
+    <div class="grid">
+      <div class="card"><b>真实 DSH 会话</b><span>每个任务在 ~/.dsh/sessions 创建真实会话，dsh web UI 可见、可追问，非一次性 mock。</span></div>
+      <div class="card"><b>渲染同源复刻</b><span>markdown / 代码高亮 / 表格 / KaTeX 公式 / GenUI 图表，与 DSH 官方界面同一套渲染核心。</span></div>
+      <div class="card"><b>执行层硬拦截</b><span>智能等级在工具调用层强制生效，越权操作直接拒绝，提示词只是第一道防线。</span></div>
+      <div class="card"><b>零配置鉴权</b><span>本机口令自动生成，随扩展 zip 写入；防本机其他网页冒用，支持连接局域网远程 relay。</span></div>
+      <div class="card"><b>面板双形态</b><span>扩展悬浮窗与业务页面悬浮窗共用同一份源码，最小化收成顶部标签，任务后台照常执行。</span></div>
+      <div class="card"><b>零第三方依赖</b><span>cordis 插件单进程单端口部署，安装即用，不污染 DSH 环境。</span></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    dsh-browser-relay · MIT License ·
+    <a href="https://github.com/xianmua/dsh-browser-relay">github.com/xianmua/dsh-browser-relay</a>
+  </div>
+</footer>
+
+</body>
+</html>
