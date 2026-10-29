@@ -117,6 +117,7 @@ export function mountPanel(init = {}) {
       .step.md pre { background: #f6f8fa; padding: 8px 10px; border-radius: 6px; overflow-x: auto; position: relative; }
       .step.md pre .lang { position: absolute; top: 4px; right: 6px; font-size: 10px; line-height: 1; color: #b0b7bf; font-family: ui-monospace, Menlo, Consolas, monospace; text-transform: uppercase; user-select: none; pointer-events: none; }
       iframe.genui-frame { display: block; width: 100%; min-height: 60px; border: 1px solid #e5e5e5; border-radius: 6px; background: #fff; }
+      .render-note { margin-top: 4px; padding: 2px 6px; font-size: 11px; color: #8a6d3b; background: #fcf8e3; border: 1px solid #faebcc; border-radius: 4px; }
       .step.md code { background: #f6f8fa; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
       .step.md pre code { background: none; padding: 0; }
       /* hljs token 配色（github light，匹配浅色代码底） */
@@ -169,6 +170,16 @@ export function mountPanel(init = {}) {
       }
       details.think .think-body::-webkit-scrollbar { width: 4px; }
       details.think .think-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+      details.proc-box { border-bottom: 1px solid #f0f0f0; padding: 2px 0; }
+      details.proc-box summary {
+        cursor: pointer; color: #999; font-size: 12px; line-height: 1.9;
+        list-style: none; user-select: none; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis;
+      }
+      details.proc-box summary::-webkit-details-marker { display: none; }
+      details.proc-box summary::before { content: "▸ "; color: #bbb; }
+      details.proc-box[open] summary::before { content: "▾ "; color: #bbb; }
+      details.proc-box .proc-body { padding: 0 0 4px 8px; }
       .divider { text-align: center; color: #bbb; font-size: 12px; padding: 6px 0 2px; }
       .input-row { display: flex; gap: 8px; padding: 12px 14px 14px; background: #fafafa; border-top: 1px solid #f0f0f0; }
       .input-row textarea {
@@ -377,25 +388,77 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
     stepsEl.scrollTop = stepsEl.scrollHeight;
   }
 
-  // DSH 渲染核心渲染一步骤（异步等待 core 就绪；div 先入列保证步骤顺序）
+  // DSH 渲染核心渲染一步骤（异步等待 core 就绪；div 先入列保证步骤顺序）。
+  // 任何失败路径都保证文本可见：降级 marked，再失败显示原文，绝不静默丢内容
   async function renderMdCore(div, text) {
     const core = coreApi ?? (await loadCore());
     if (!div.isConnected) return; // 新会话已清空
     if (core) {
       try {
         core.renderDshMd(div, text, (specText) => buildGenuiFrame(specText));
+        // React 渲染是异步调度的：下一帧仍无内容说明渲染核心静默失败，降级并显示原因
+        await new Promise((r) => requestAnimationFrame(() => r()));
+        if (!div.isConnected) return;
+        if (!div.textContent.trim()) {
+          const msg = "渲染核心未产出内容（React 渲染空）";
+          console.warn("[dsh-assistant]", msg);
+          renderMdLegacy(div, text);
+          appendRenderNote(div, msg);
+        }
         stepsEl.scrollTop = stepsEl.scrollHeight;
         return;
       } catch (e) {
         console.warn("[dsh-assistant] DSH 渲染失败，降级 marked：", e);
+        if (!div.isConnected) return;
+        appendRenderNote(div, `DSH 渲染异常：${String(e?.message ?? e).slice(0, 120)}`);
       }
     }
     renderMdLegacy(div, text);
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    if (div.isConnected && !div.textContent.trim()) {
+      // marked 也产出为空：直接显示原文，内容绝不消失
+      div.textContent = text;
+      appendRenderNote(div, "markdown 渲染为空，已显示原文");
+    }
+  }
+  function appendRenderNote(div, msg) {
+    const note = document.createElement("div");
+    note.className = "render-note";
+    note.textContent = `⚠ ${msg}`;
+    div.appendChild(note);
+  }
+
+  // 对齐 DSH web UI：回合结束后把过程步骤（执行/等待/思考）收进可折叠条，突出最终回复
+  function collapseProcess() {
+    const items = [...stepsEl.children].filter(
+      (el) =>
+        (el.classList.contains("step") &&
+          !el.classList.contains("md") &&
+          !el.classList.contains("me") &&
+          !el.classList.contains("err")) ||
+        el.classList.contains("think"),
+    );
+    if (items.length < 2) return; // 过程太短不折
+    const det = document.createElement("details");
+    det.className = "proc-box";
+    const sum = document.createElement("summary");
+    sum.textContent = `执行过程（${items.length} 步）`;
+    const body = document.createElement("div");
+    body.className = "proc-body";
+    det.append(sum, body);
+    stepsEl.insertBefore(det, items[0]);
+    for (const el of items) body.appendChild(el);
   }
 
   // marked 轻量渲染（DSH 管线失败时的 fallback）
   function renderMdLegacy(div, text) {
-    div.innerHTML = renderMd(text);
+    try {
+      div.innerHTML = renderMd(text);
+    } catch (e) {
+      console.warn("[dsh-assistant] marked 渲染失败，显示原文：", e);
+      div.textContent = text;
+      return;
+    }
     // ```dsh-ui 围栏 → GenUI sandbox iframe 渲染（解析失败保留代码块）
     for (const pre of [...div.querySelectorAll("pre code.language-dsh-ui")].map((c) => c.closest("pre"))) {
       if (!pre) continue;
@@ -1106,6 +1169,7 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
     const myGen = ++pollGen;
     let after = 0;
     let wasRunning = null; // chat 模式运行态变化检测（避免每轮重复切 hook）
+    let procCollapsed = false; // 本回合过程步骤是否已折叠（终态折一次，新回合重置）
     let idleMs = 800; // chat 空闲轮询间隔（无动静翻倍退避至 4s，有动静恢复 800ms）
     try {
       while (true) {
@@ -1119,7 +1183,15 @@ html,body{margin:0;padding:0;background:#fff;font-family:system-ui,-apple-system
           else addStep(ev.text, false, ev.md);
           after = Math.max(after, ev.seq);
         }
-        if (d.statusText) setStatus(d.statusText);
+        if (d.statusText) {
+          setStatus(d.statusText);
+          // 回合终态（已完成/已失败）：把本轮过程步骤收进折叠条，对齐 DSH web UI；新回合开始时重置
+          const done = /^(已完成|已失败)/.test(d.statusText);
+          if (done && !procCollapsed) {
+            procCollapsed = true;
+            collapseProcess();
+          } else if (!done) procCollapsed = false;
+        }
         if (d.command) {
           // 已请求停止：不再执行，回传占位结果（relay 侧 cancel 已 settle，此为兜底）后等终态
           const value = cancelRequested
