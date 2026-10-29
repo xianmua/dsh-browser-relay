@@ -482,6 +482,8 @@ ${assetScripts}
   // 避免这种「内容在但看不见」的情况只能靠用户肉眼看空白排查
   function verifyVisible(div, source) {
     if (!div.isConnected || !div.textContent.trim() || div.offsetHeight > 0) return;
+    // 面板最小化（display:none）或步骤收进折叠条时高度必然为 0，属正常不可见，不算渲染事故
+    if (panel.hidden || div.closest("details:not([open])")) return;
     const first = div.firstElementChild;
     const cs = first ? getComputedStyle(first) : null;
     const diag = {
@@ -1628,6 +1630,8 @@ ${assetScripts}
   tab.addEventListener("click", () => {
     tab.hidden = true;
     panel.hidden = false;
+    // 最小化期间渲染的内容当时因 display:none 跳过了可见性校验，展开后补查一次
+    for (const d of stepsEl.querySelectorAll(".step.md")) verifyVisible(d, "recheck");
     inputEl.focus();
   });
   $(".collapse").addEventListener("click", () => {
