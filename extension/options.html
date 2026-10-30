@@ -89,15 +89,21 @@
     </div>
     <div class="field">
       <label for="aiLevel"
-        >智能等级（L3 默认，防止模型乱调研；L2 只读不能动页面，L4 带 AI 操作演示特效，L5 开放 DSH 其他插件工具）</label
+        >智能等级（L4 默认；L2 本页面读写禁导航，L3 可同域含子域导航，L5 开放 DSH 全量+浏览器全量）</label
       >
       <select id="aiLevel">
         <option value="none">L1：仅问答（不触碰页面）</option>
-        <option value="read">L2：当前页面只读模式</option>
-        <option value="browser">L3：当前页面操作·静默执行（推荐）</option>
-        <option value="browserFx">L4：AI 操作演示（模拟光标+点击特效）</option>
-        <option value="all">L5：DSH 全量放开</option>
+        <option value="page">L2：本页面读写（禁导航）</option>
+        <option value="site">L3：站内浏览（同域含子域可导航）</option>
+        <option value="dsh">L4：页面+DSH 工具（默认）</option>
+        <option value="all">L5：DSH 全量+浏览器全量</option>
       </select>
+    </div>
+    <div class="field">
+      <label for="showFx" style="display: flex; align-items: center; gap: 6px">
+        <input type="checkbox" id="showFx" style="width: auto" />
+        显示模拟光标与操作特效（默认关闭，与智能等级解绑）
+      </label>
     </div>
     <div class="field">
       <label for="customPrompt">自定义指令（可选，随任务发给 AI 的行为要求，每行一条）</label>

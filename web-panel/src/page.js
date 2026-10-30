@@ -12,9 +12,12 @@ if (tag && (tag.dataset.token || tag.dataset.baseUrl || tag.dataset.workspace ||
   if (tag.dataset.baseUrl) init.baseURL = tag.dataset.baseUrl;
   if (tag.dataset.workspace) init.workspace = tag.dataset.workspace;
   if (tag.dataset.prompt) init.customPrompt = tag.dataset.prompt;
-  // 智能等级：none/read/browser/browserFx/all（也接受 L1-L5 或大小写随意的档位写法）
+  // 智能等级：none/page/site/dsh/all（也接受 L1-L5 或旧档位名 browser/browserFx/read，大小写随意）
   const scope = (tag.dataset.aiLevel || "").trim().toLowerCase();
-  const scopeVal = { l1: "none", l2: "read", l3: "browser", l4: "browserFx", l5: "all", browserfx: "browserFx" }[scope] ?? scope;
-  if (["none", "read", "browser", "browserFx", "all"].includes(scopeVal)) init.aiLevel = scopeVal;
+  const scopeVal =
+    { l1: "none", l2: "page", l3: "site", l4: "dsh", l5: "all", browser: "page", browserfx: "page", read: "page" }[scope] ?? scope;
+  // 页面版封顶 L4：all 钳到 dsh
+  const clampedVal = scopeVal === "all" ? "dsh" : scopeVal;
+  if (["none", "page", "site", "dsh", "all"].includes(clampedVal)) init.aiLevel = clampedVal;
   if (Object.keys(init).length) mountPanel(init);
 }

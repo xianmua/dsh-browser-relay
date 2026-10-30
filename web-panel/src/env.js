@@ -12,6 +12,7 @@ export async function cfgOverrides() {
       tokenOverride: "",
       customPrompt: "",
       aiLevel: "",
+      showFx: false,
       workspace: "",
     });
     return {
@@ -19,6 +20,7 @@ export async function cfgOverrides() {
       token: String(st.tokenOverride ?? "").trim(),
       customPrompt: st.customPrompt || "",
       aiLevel: st.aiLevel || "",
+      showFx: st.showFx === true,
       workspace: st.workspace || "",
     };
   }
@@ -28,18 +30,20 @@ export async function cfgOverrides() {
     token: ls("token"),
     customPrompt: ls("customPrompt"),
     aiLevel: ls("aiLevel"),
+    showFx: ls("showFx") === "1",
     workspace: ls("workspace"),
   };
 }
 
 // 配置覆盖写入（设置弹层保存）：留空值 = 移除覆盖
-export async function cfgSave({ baseURL, token, aiLevel, customPrompt, workspace }) {
+export async function cfgSave({ baseURL, token, aiLevel, customPrompt, showFx, workspace }) {
   if (isExt) {
     const put = {};
     if (baseURL) put.baseURLOverride = baseURL;
     if (token) put.tokenOverride = token;
     if (aiLevel) put.aiLevel = aiLevel;
     if (customPrompt) put.customPrompt = customPrompt;
+    put.showFx = showFx === true;
     if (workspace) put.workspace = workspace;
     await chrome.storage.local.set(put);
     return;
@@ -50,6 +54,7 @@ export async function cfgSave({ baseURL, token, aiLevel, customPrompt, workspace
   put("token", token);
   put("aiLevel", aiLevel);
   put("customPrompt", customPrompt);
+  put("showFx", showFx === true ? "1" : "");
   put("workspace", workspace);
 }
 
@@ -61,10 +66,11 @@ export async function cfgClear() {
       "tokenOverride",
       "customPrompt",
       "aiLevel",
+      "showFx",
       "workspace",
     ]);
     return;
   }
-  for (const k of ["baseURL", "token", "aiLevel", "customPrompt", "workspace"])
+  for (const k of ["baseURL", "token", "aiLevel", "customPrompt", "showFx", "workspace"])
     localStorage.removeItem(`dshAssistant.${k}`);
 }

@@ -636,7 +636,11 @@ ${assetScripts}
     cfg.baseURL = o.baseURL || cfg.baseURL;
     cfg.apiKey = o.token || cfg.apiKey;
     cfg.customPrompt = o.customPrompt || cfg.customPrompt;
-    cfg.aiLevel = o.aiLevel || cfg.aiLevel;
+    // 旧档位名迁移：read/browser/browserFx→page；页面版封顶 L4（all→dsh）
+    cfg.aiLevel =
+      { read: "page", browser: "page", browserFx: "page" }[o.aiLevel] || o.aiLevel || cfg.aiLevel;
+    if (!isExt && cfg.aiLevel === "all") cfg.aiLevel = "dsh";
+    cfg.showFx = o.showFx === true || cfg.showFx === true;
     cfg.workspace = o.workspace || cfg.workspace;
     return cfg;
   }
@@ -942,8 +946,9 @@ ${assetScripts}
 
   async function runTool(tool, args) {
     const c = await ensureController();
-    // 操作轨迹特效：L4（AI 操作演示）档位开启模拟光标，其余档位静默执行（hideMask 兜底收掉已展示的）
-    const wantFx = (await readCfg()).aiLevel === "browserFx";
+    // 操作轨迹特效：独立开关 showFx，开启且档位≠L1（none）时显示模拟光标（hideMask 兜底收掉已展示的）
+    const cfg = await readCfg();
+    const wantFx = cfg.showFx === true && cfg.aiLevel !== "none";
     try {
       if (wantFx) await c.showMask();
       else await c.hideMask();
@@ -1004,6 +1009,37 @@ ${assetScripts}
           };
         }
         return r;
+      }
+      case "browser_navigate": {
+        const raw = String(args?.url ?? "").trim();
+        let target;
+        try {
+          target = new URL(raw);
+        } catch {
+          return { ok: false, message: `URL 无效：${raw.slice(0, 100)}（必须是 http/https 绝对地址）` };
+        }
+        if (!/^https?:$/.test(target.protocol))
+          return { ok: false, message: "URL 必须是 http/https 绝对地址" };
+        // 同域含子域校验（L3/L4）：站点键 = hostname 末两段（IP 与单段主机名原样）
+        const siteKey = (h) => {
+          h = String(h ?? "").toLowerCase();
+          return /^\d+\.\d+\.\d+\.\d+$/.test(h) || !h.includes(".")
+            ? h
+            : h.split(".").slice(-2).join(".");
+        };
+        if (siteKey(target.hostname) !== siteKey(location.hostname))
+          return {
+            ok: false,
+            message: `智能等级限制：仅允许同域（含子域）导航，目标 ${target.hostname} 与当前站点 ${location.hostname} 不同域，已拦截。`,
+          };
+        // 断点续传：命令回传才 settle，导航后新页面 loader 重轮询会再次收到本命令，
+        // 此时目标已是当前页 → 直接回成功，模型即可继续操作新页面
+        if (target.href === location.href)
+          return { ok: true, message: `已导航到 ${target.href}，新页面已就绪` };
+        setTimeout(() => {
+          location.href = target.href;
+        }, 50); // 略等结果回传 fetch 发出再跳转
+        return { ok: true, message: `正在导航到 ${target.href}，新页面就绪后继续操作` };
       }
       default:
         return { ok: false, message: `未知命令：${tool}` };
@@ -1401,7 +1437,7 @@ ${assetScripts}
           title: document.title,
           pageKey: pageKey(),
           customPrompt: customPrompt || "",
-          aiLevel: aiLevel || "browser",
+          aiLevel: aiLevel || "dsh",
           workspace: workspace || "",
           tabKey,
         }),
@@ -1542,13 +1578,15 @@ ${assetScripts}
       <label>Relay Token</label><input class="s-token" value="${esc(cfg.apiKey)}">
       <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区">
       <label>智能等级</label>
-      <select class="s-scope"><option value="none">L1：仅问答（不触碰页面）</option><option value="read">L2：当前页面只读模式</option><option value="browser">L3：当前页面操作·静默执行（推荐）</option><option value="browserFx">L4：AI 操作演示（模拟光标+点击特效）</option><option value="all">L5：DSH 全量放开</option></select>
+      <select class="s-scope"><option value="none">L1：仅问答（不触碰页面）</option><option value="page">L2：本页面读写（禁导航）</option><option value="site">L3：站内浏览（同域含子域可导航）</option><option value="dsh">L4：页面+DSH 工具（默认）</option>${isExt ? '<option value="all">L5：DSH 全量+浏览器全量</option>' : ""}</select>
+      <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="s-fx" style="width:auto"> 显示模拟光标与操作特效</label>
       <label>自定义 prompt（随任务发给 agent）</label><textarea class="s-prompt" placeholder="对当前业务页的全局要求，如输出格式、固定流程">${esc(cfg.customPrompt)}</textarea>
       <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>
       <div class="diag">面板 v${esc(PANEL_VERSION)} · 渲染核心${
         coreApi ? "已加载（DSH 管线）" : corePromise ? "加载中…" : "未加载（降级 marked 轻量渲染）"
       }</div>`;
     setboxEl.querySelector(".s-scope").value = cfg.aiLevel;
+    setboxEl.querySelector(".s-fx").checked = cfg.showFx === true;
     setboxEl.hidden = false;
     // 保存即写配置覆盖（扩展=chrome.storage / 页面=localStorage，readCfg 每次请求现读，下个任务即生效）；留空 = 移除该项覆盖
     setboxEl.querySelector(".save").addEventListener("click", async () => {
@@ -1559,6 +1597,7 @@ ${assetScripts}
         workspace: v(".s-ws"),
         aiLevel: v(".s-scope"),
         customPrompt: v(".s-prompt"),
+        showFx: setboxEl.querySelector(".s-fx").checked,
       });
       setboxEl.hidden = true;
       setStatus("已保存");

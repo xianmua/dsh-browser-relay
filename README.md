@@ -39,10 +39,10 @@ dsh web
         data-base-url="/your-proxy"
         data-token="向导页复制的口令"
         data-workspace="D:\工作区"
-        data-ai-level="L3"></script>
+        data-ai-level="L4"></script>
 ```
 
-- 属性优先级：设置面板本机覆盖 > `data-*` 注入 > 默认值；`data-workspace` 可省（留空则会话不分组）；`data-ai-level` 可省（智能等级 L1-L5 或 none/read/browser/browserFx/all，默认 L3 页面操作·静默）
+- 属性优先级：设置面板本机覆盖 > `data-*` 注入 > 默认值；`data-workspace` 可省（留空则会话不分组）；`data-ai-level` 可省（智能等级 L1-L5 或 none/page/site/dsh/all，默认 L4）
 - 由 relay 托管面板脚本（IIFE 打包产物，仓库内 `panel/` 目录），连 `npm install` 都不用；relay 更新后刷新页面即拿到新版
 - 也可省略 `data-token`，由页面 JS 调 `DshAssistant.mountPanel({ baseURL, apiKey, workspace })` 手动挂载
 - 面板与扩展**单一源码**（`web-panel/src/`，经 env.js 适配层 + esbuild 双构建）；改码后 `npm run build` 一次产出 `panel/dsh-assistant.min.js` 与 `extension/content/loader.js`
@@ -132,7 +132,15 @@ netsh advfirewall firewall add rule name="dsh-browser-relay" dir=in action=allow
 - `9916` 端口有鉴权口令门禁（每机自动生成，仅存本机 `~/.dsh/browser-relay-token`），防止本机其他网页冒用；向导页不含 CORS 头，外部网页读不到口令
 - 口令随扩展 zip 一起写入扩展目录——zip 与解压目录都只在本机使用，不要分发给他人（对方机器口令不匹配，本来也用不了）
 - 扩展设置页可改「Relay 地址」「Relay Token」「工作区」「智能等级」（均留空/默认用注入值；连远程机器且口令不一致时在设置页填远程口令即可），新 key 隔离防旧版残留
-- 智能等级五档：L1 仅问答（不触碰页面）/ L2 当前页面只读 / L3 页面操作·静默执行（默认推荐）/ L4 AI 操作演示（模拟光标+点击特效）/ L5 DSH 全量放开；档位在执行层硬拦截，越权工具调用直接拒绝
+- 智能等级五档：L1 仅问答（不触碰页面）/ L2 本页面读写（禁导航）/ L3 站内浏览（同域含子域可导航）/ L4 页面+DSH 工具（默认）/ L5 DSH 全量+浏览器全量（导航不限域）；档位在执行层硬拦截，越权工具调用直接拒绝
+- 「模拟光标与操作特效」为独立开关（默认关闭），开启且档位≠L1 时生效，与智能等级解绑
+
+## 版本 0.7.0 变更摘要
+
+- 智能等级五档重定义（不兼容变更，配置键值旧档位自动迁移）：L1 `none` 仅问答 / L2 `page` 本页面读写 / L3 `site` 站内浏览（同域含子域可导航）/ L4 `dsh` 页面+DSH 工具（新默认档）/ L5 `all` DSH 全量+浏览器全量（导航不限域）；旧值 read/browser/browserFx→page，特效不再随档位走
+- 新增 `browser_navigate` 同域导航工具（L3 及以上开放，跨域硬拦截）；导航后新页面自动恢复任务监听，命令断点续传
+- 新增独立特效开关 `showFx`（默认关）：开启且档位≠L1 时显示模拟光标与操作特效，与智能等级解绑
+- 页面版（非扩展）封顶 L4：`data-ai-level="all"` 与设置均钳制到 L4
 
 ## 版本 0.6.1 变更摘要
 
