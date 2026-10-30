@@ -125,9 +125,19 @@ export function mountPanel(init = {}) {
       .render-note { margin-top: 4px; padding: 2px 6px; font-size: 11px; color: #8a6d3b; background: #fcf8e3; border: 1px solid #faebcc; border-radius: 4px; }
       .step.md img { max-width: 100%; border-radius: 6px; }
       .img-fallback { margin: 4px 0; padding: 6px 10px; font-size: 12px; color: #999; background: #fafafa; border: 1px dashed #ddd; border-radius: 6px; word-break: break-all; }
-      .sessbox { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px; }
-      .sessbox::-webkit-scrollbar { width: 4px; }
-      .sessbox::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+      .sessbox {
+        position: absolute; inset: 0; z-index: 30; background: #fff;
+        display: flex; flex-direction: column;
+        transform: translateX(-100%); visibility: hidden;
+        transition: transform .22s cubic-bezier(.22,1,.36,1), visibility .22s;
+      }
+      .sessbox.show { transform: translateX(0); visibility: visible; }
+      .sessbox .shead { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #f0f0f0; font-size: 13px; font-weight: 600; color: #444; }
+      .sessbox .sback { width: 24px; height: 24px; border: none; background: none; cursor: pointer; color: #999; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 16px; line-height: 1; }
+      .sessbox .sback:hover { color: #333; background: #f0f0f0; }
+      .sessbox .slist { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px; }
+      .sessbox .slist::-webkit-scrollbar { width: 4px; }
+      .sessbox .slist::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
       .sessbox .empty { padding: 24px 10px; color: #999; font-size: 12px; text-align: center; }
       .srow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px; border-bottom: 1px solid #f5f5f5; cursor: pointer; font-size: 12px; border-radius: 4px; }
       .srow:hover { background: #f0f6ff; }
@@ -260,11 +270,11 @@ export function mountPanel(init = {}) {
       <div class="header">
         <span class="title">页面 AI 助手</span>
         <span>
-          <button class="sessions" title="历史会话列表">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
-          </button>
           <button class="newchat" title="开新会话（断开当前任务，下一条输入将新建任务）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="sessions" title="历史会话列表">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
           </button>
           <button class="settings" title="设置（Relay 地址 / Token / 工作区 / 智能等级 / 自定义 prompt）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -278,9 +288,12 @@ export function mountPanel(init = {}) {
       <div class="qbox" hidden></div>
       <div class="cbox" hidden></div>
       <div class="setbox" hidden></div>
-      <div class="sessbox" hidden></div>
       <div class="steps"></div>
       <div class="menu" hidden></div>
+      <div class="sessbox">
+        <div class="shead"><button class="sback" title="返回">‹</button><span>历史会话</span></div>
+        <div class="slist"></div>
+      </div>
       <div class="input-row">
         <textarea rows="1" placeholder="输入任务（「记住：xxx」沉淀经验）"></textarea>
         <button class="btn run">执行</button>
@@ -297,6 +310,7 @@ export function mountPanel(init = {}) {
   const cboxEl = $(".cbox");
   const setboxEl = $(".setbox");
   const sessboxEl = $(".sessbox");
+  const sessListEl = sessboxEl?.querySelector(".slist") ?? sessboxEl;
   const inputEl = $(".input-row textarea");
   const runBtn = $(".btn.run");
   const stopBtn = $(".btn.stop");
@@ -1325,18 +1339,17 @@ ${assetScripts}
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
   }
   function hideSessions() {
-    sessboxEl.hidden = true;
-    stepsEl.hidden = false;
+    sessboxEl.classList.remove("show");
   }
   function toggleSessions() {
-    if (!sessboxEl.hidden) return hideSessions();
-    sessboxEl.replaceChildren();
+    if (sessboxEl.classList.contains("show")) return hideSessions();
+    sessListEl.replaceChildren();
     const list = loadSessionList();
     if (!list.length) {
       const empty = document.createElement("div");
       empty.className = "empty";
       empty.textContent = "暂无历史会话（发起任务后自动记录）";
-      sessboxEl.appendChild(empty);
+      sessListEl.appendChild(empty);
     }
     for (const entry of list) {
       const row = document.createElement("div");
@@ -1354,10 +1367,9 @@ ${assetScripts}
       time.textContent = fmtTime(entry.ts);
       row.append(title, id, time);
       row.addEventListener("click", () => loadSession(entry));
-      sessboxEl.appendChild(row);
+      sessListEl.appendChild(row);
     }
-    stepsEl.hidden = true;
-    sessboxEl.hidden = false;
+    sessboxEl.classList.add("show"); // 全面板覆盖层：从左滑出盖住内容区
   }
   // 切换到历史会话：拉取历史回放（relay 会按 sessionId 重挂被清理的记录），此后与 live 会话无异（可续聊/可操作页面）
   async function loadSession(entry) {
@@ -1389,12 +1401,15 @@ ${assetScripts}
       setStatus(d.statusText || "对话中（可继续输入）");
       setRunning(false);
       setDialogHook("off");
+      hideSessions(); // 加载成功滑回会话视图（回放内容已在下方就绪）
       pollLoop(d.taskId, d.seq); // 从历史末尾续接轮询，不重不漏
     } catch (e) {
+      hideSessions(); // 失败也要滑回，让错误信息可见
       halt(e);
     }
   }
   $(".sessions").addEventListener("click", toggleSessions);
+  sessboxEl.querySelector(".sback").addEventListener("click", hideSessions);
 
   // 「+」开新会话：断开当前任务绑定（终止轮询），下一条输入新建任务会话；旧会话仍可在 DSH web UI 回看
   function newChat() {
