@@ -122,6 +122,8 @@ export function mountPanel(init = {}) {
       .step.md pre .lang { position: absolute; top: 4px; right: 6px; font-size: 10px; line-height: 1; color: #b0b7bf; font-family: ui-monospace, Menlo, Consolas, monospace; text-transform: uppercase; user-select: none; pointer-events: none; }
       iframe.genui-frame { display: block; width: 100%; min-height: 60px; border: 1px solid #e5e5e5; border-radius: 6px; background: #fff; }
       .render-note { margin-top: 4px; padding: 2px 6px; font-size: 11px; color: #8a6d3b; background: #fcf8e3; border: 1px solid #faebcc; border-radius: 4px; }
+      .step.md img { max-width: 100%; border-radius: 6px; }
+      .img-fallback { margin: 4px 0; padding: 6px 10px; font-size: 12px; color: #999; background: #fafafa; border: 1px dashed #ddd; border-radius: 6px; word-break: break-all; }
       .step.md code { background: #f6f8fa; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
       .step.md pre code { background: none; padding: 0; }
       /* hljs token 配色（github light，匹配浅色代码底） */
@@ -404,11 +406,13 @@ ${assetScripts}
     stepsEl.appendChild(div);
     if (md) {
       // 首选：DSH 原版渲染核心（按需加载 core 产物）；失败/不可用降级 marked 轻量管线
-      renderMdCore(div, text).catch((e) => {
-        // 渲染流程自身异常（理论上内部已兜底，此处防漏网之鱼静默丢内容）
-        console.warn("[dsh-assistant] 渲染流程异常，降级 marked：", e);
-        if (div.isConnected && !div.textContent.trim()) renderMdLegacy(div, text);
-      });
+      renderMdCore(div, text)
+        .catch((e) => {
+          // 渲染流程自身异常（理论上内部已兜底，此处防漏网之鱼静默丢内容）
+          console.warn("[dsh-assistant] 渲染流程异常，降级 marked：", e);
+          if (div.isConnected && !div.textContent.trim()) renderMdLegacy(div, text);
+        })
+        .finally(() => rewriteLocalImgs(div).catch(() => {}));
     } else div.textContent = text;
     stepsEl.scrollTop = stepsEl.scrollHeight;
   }
@@ -477,6 +481,29 @@ ${assetScripts}
     note.className = "render-note";
     note.textContent = `⚠ ${msg}`;
     div.appendChild(note);
+  }
+  // 本地相对路径图片兜底：img 相对 src 是相对网页 URL 解析的，而模型写的是相对 DSH agent
+  // 工作区的路径 → 直接加载必碎。渲染完成后统一改写成 relay /file 端点（按 taskId 定位
+  // 工作区返回文件）；加载失败再兜一层占位，避免碎图标
+  async function rewriteLocalImgs(div) {
+    if (!activeTaskId || !div.isConnected) return;
+    const cfg = await readCfg();
+    const base = String(cfg.baseURL ?? "").replace(/\/+$/, "");
+    for (const img of div.querySelectorAll("img")) {
+      const src = img.getAttribute("src") ?? "";
+      if (!src || /^(https?:|data:|blob:)/i.test(src)) continue;
+      if (img.dataset.localRewritten) continue;
+      img.dataset.localRewritten = "1";
+      img.src = `${base}/file?taskId=${activeTaskId}&p=${encodeURIComponent(src)}&token=${encodeURIComponent(cfg.apiKey)}`;
+      img.onerror = () => {
+        img.onerror = null;
+        if (!img.isConnected) return;
+        const tip = document.createElement("div");
+        tip.className = "img-fallback";
+        tip.textContent = `⚠ 图片加载失败：${img.getAttribute("alt") || src}`;
+        img.replaceWith(tip);
+      };
+    }
   }
   // 内容已提交进 DOM 但视觉高度为 0（样式层不可见，控制台无任何报错）：直接在面板上标注并吐诊断，
   // 避免这种「内容在但看不见」的情况只能靠用户肉眼看空白排查

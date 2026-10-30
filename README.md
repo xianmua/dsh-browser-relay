@@ -135,6 +135,11 @@ netsh advfirewall firewall add rule name="dsh-browser-relay" dir=in action=allow
 - 智能等级五档：L1 仅问答（不触碰页面）/ L2 本页面读写（禁导航）/ L3 站内浏览（同域含子域可导航）/ L4 页面+DSH 工具（默认）/ L5 DSH 全量+浏览器全量（导航不限域）；档位在执行层硬拦截，越权工具调用直接拒绝
 - 「模拟光标与操作特效」为独立开关（默认关闭），开启且档位≠L1 时生效，与智能等级解绑
 
+## 版本 0.7.1 变更摘要
+
+- 回复内联图片兜底：模型写的本地相对路径图片（如 `![图](charts_display/xxx.png)`）现在可直接显示——relay 新增 `GET /file?taskId=&p=&token=` 静态端点，按任务工作区返回文件（query token 鉴权、路径越界硬拒绝、按扩展名 Content-Type）；面板渲染 markdown 后自动把相对路径 img 改写为该端点，加载失败显示占位提示而非碎图标
+- 任务记录新增 workspace 字段（创建会话时保存），/file 端点据此定位文件根目录
+
 ## 版本 0.7.0 变更摘要
 
 - 智能等级五档重定义（不兼容变更，配置键值旧档位自动迁移）：L1 `none` 仅问答 / L2 `page` 本页面读写 / L3 `site` 站内浏览（同域含子域可导航）/ L4 `dsh` 页面+DSH 工具（新默认档）/ L5 `all` DSH 全量+浏览器全量（导航不限域）；旧值 read/browser/browserFx→page，特效不再随档位走
