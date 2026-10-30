@@ -1573,8 +1573,7 @@ ${assetScripts}
       sep.textContent = "── 新任务 ──";
       stepsEl.appendChild(sep);
     }
-    addUserBubble(task);
-    clearHighlights(); // 兜底清掉上一任务可能残留的索引标注
+    clearHighlights(); // 兜底清掉上一任务可能残留的索引标注（首条气泡由 relay 的 user 事件经 poll 回显，刷新/切会话回放不丢）
     turnStartMs = Date.now(); // 新任务回合起点（操作条据此显示回合耗时）
     sessionStorage.setItem("dshAiTurnStart", String(turnStartMs));
     try {
