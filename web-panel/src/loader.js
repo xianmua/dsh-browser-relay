@@ -94,13 +94,14 @@ export function mountPanel(init = {}) {
         padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #f0f0f0; user-select: none;
       }
       .title { font-size: 14px; font-weight: 600; letter-spacing: .5px; }
-      .settings, .collapse, .newchat {
+      .settings, .collapse, .newchat, .sessions {
         width: 24px; height: 24px; border: none; background: none; cursor: pointer;
         color: #999; border-radius: 6px; display: inline-flex; align-items: center;
         justify-content: center; padding: 0;
       }
       .settings:hover, .collapse:hover { color: #333; background: #f0f0f0; }
-      .settings svg, .collapse svg, .newchat svg { width: 14px; height: 14px; }
+      .sessions:hover, .newchat:hover { color: #333; background: #f0f0f0; }
+      .settings svg, .collapse svg, .newchat svg, .sessions svg { width: 14px; height: 14px; }
       .status-line { padding: 9px 16px; font-size: 13px; color: #888; border-bottom: 1px solid #f5f5f5; min-height: 36px; }
       .steps {
         flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 12px;
@@ -124,6 +125,15 @@ export function mountPanel(init = {}) {
       .render-note { margin-top: 4px; padding: 2px 6px; font-size: 11px; color: #8a6d3b; background: #fcf8e3; border: 1px solid #faebcc; border-radius: 4px; }
       .step.md img { max-width: 100%; border-radius: 6px; }
       .img-fallback { margin: 4px 0; padding: 6px 10px; font-size: 12px; color: #999; background: #fafafa; border: 1px dashed #ddd; border-radius: 6px; word-break: break-all; }
+      .sessbox { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px; }
+      .sessbox::-webkit-scrollbar { width: 4px; }
+      .sessbox::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+      .sessbox .empty { padding: 24px 10px; color: #999; font-size: 12px; text-align: center; }
+      .srow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px; border-bottom: 1px solid #f5f5f5; cursor: pointer; font-size: 12px; border-radius: 4px; }
+      .srow:hover { background: #f0f6ff; }
+      .srow .s-title { color: #333; flex-shrink: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .srow .s-id { color: #999; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .srow .s-time { color: #666; flex-shrink: 0; font-variant-numeric: tabular-nums; }
       .step.md code { background: #f6f8fa; padding: 1px 4px; border-radius: 4px; font-size: 12px; }
       .step.md pre code { background: none; padding: 0; }
       /* hljs token 配色（github light，匹配浅色代码底） */
@@ -250,6 +260,9 @@ export function mountPanel(init = {}) {
       <div class="header">
         <span class="title">页面 AI 助手</span>
         <span>
+          <button class="sessions" title="历史会话列表">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>
+          </button>
           <button class="newchat" title="开新会话（断开当前任务，下一条输入将新建任务）">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
@@ -265,6 +278,7 @@ export function mountPanel(init = {}) {
       <div class="qbox" hidden></div>
       <div class="cbox" hidden></div>
       <div class="setbox" hidden></div>
+      <div class="sessbox" hidden></div>
       <div class="steps"></div>
       <div class="menu" hidden></div>
       <div class="input-row">
@@ -282,6 +296,7 @@ export function mountPanel(init = {}) {
   const qboxEl = $(".qbox");
   const cboxEl = $(".cbox");
   const setboxEl = $(".setbox");
+  const sessboxEl = $(".sessbox");
   const inputEl = $(".input-row textarea");
   const runBtn = $(".btn.run");
   const stopBtn = $(".btn.stop");
@@ -1288,6 +1303,98 @@ ${assetScripts}
     });
     showMenu(items);
   }
+  // ---------- 历史会话列表：面板发起过的会话存 localStorage，点开切换并回放历史 ----------
+  const SESS_KEY = "dshAiSessions"; // [{sessionId, taskId, title, ts}]，taskId 可能因 relay 重启重挂后变化
+  const SESS_CAP = 30;
+  function loadSessionList() {
+    try {
+      const list = JSON.parse(localStorage.getItem(SESS_KEY));
+      return Array.isArray(list) ? list.filter((s) => s?.sessionId) : [];
+    } catch {
+      return [];
+    }
+  }
+  function saveSessionEntry(entry) {
+    const list = loadSessionList().filter((s) => s.sessionId !== entry.sessionId);
+    list.unshift(entry);
+    localStorage.setItem(SESS_KEY, JSON.stringify(list.slice(0, SESS_CAP)));
+  }
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+  function hideSessions() {
+    sessboxEl.hidden = true;
+    stepsEl.hidden = false;
+  }
+  function toggleSessions() {
+    if (!sessboxEl.hidden) return hideSessions();
+    sessboxEl.replaceChildren();
+    const list = loadSessionList();
+    if (!list.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "暂无历史会话（发起任务后自动记录）";
+      sessboxEl.appendChild(empty);
+    }
+    for (const entry of list) {
+      const row = document.createElement("div");
+      row.className = "srow";
+      const title = document.createElement("span");
+      title.className = "s-title";
+      title.textContent = entry.title || "(无标题)";
+      title.title = entry.title || "";
+      const id = document.createElement("span");
+      id.className = "s-id";
+      id.textContent = entry.sessionId;
+      id.title = entry.sessionId;
+      const time = document.createElement("span");
+      time.className = "s-time";
+      time.textContent = fmtTime(entry.ts);
+      row.append(title, id, time);
+      row.addEventListener("click", () => loadSession(entry));
+      sessboxEl.appendChild(row);
+    }
+    stepsEl.hidden = true;
+    sessboxEl.hidden = false;
+  }
+  // 切换到历史会话：拉取历史回放（relay 会按 sessionId 重挂被清理的记录），此后与 live 会话无异（可续聊/可操作页面）
+  async function loadSession(entry) {
+    if (inputEl.disabled) {
+      setStatus("请等当前回合结束（或先点停止）");
+      return;
+    }
+    pollGen++; // 停掉当前任务轮询
+    resetTask();
+    if (coreApi) for (const el of stepsEl.children) coreApi.unmountDshRd(el);
+    stepsEl.replaceChildren();
+    hideSessions();
+    setStatus("正在加载会话历史…");
+    try {
+      const d = await api(
+        `/task/${entry.taskId}/history?sessionId=${encodeURIComponent(entry.sessionId)}&tab=${encodeURIComponent(tabKey)}`,
+      );
+      entry.taskId = d.taskId; // relay 重启后重挂，taskId 可能变化，回写列表
+      saveSessionEntry(entry);
+      activeTaskId = d.taskId;
+      sessionStorage.setItem("dshAiTask", String(d.taskId));
+      chatMode = true; // 历史会话一律会话模式：可继续输入
+      for (const ev of d.events ?? []) {
+        if (ev.user) addUserBubble(ev.text);
+        else addStep(ev.text, false, ev.md);
+      }
+      addStep(`已切换到会话 ${d.taskId}（共 ${d.events?.length ?? 0} 条记录），可直接继续输入`);
+      setStatus(d.statusText || "对话中（可继续输入）");
+      setRunning(false);
+      setDialogHook("off");
+      pollLoop(d.taskId, d.seq); // 从历史末尾续接轮询，不重不漏
+    } catch (e) {
+      halt(e);
+    }
+  }
+  $(".sessions").addEventListener("click", toggleSessions);
+
   // 「+」开新会话：断开当前任务绑定（终止轮询），下一条输入新建任务会话；旧会话仍可在 DSH web UI 回看
   function newChat() {
     if (inputEl.disabled) {
@@ -1303,9 +1410,9 @@ ${assetScripts}
   }
 
   let pollGen = 0; // 轮询代际：新轮询启动后旧的自行退出（防双循环重复轮询）
-  async function pollLoop(taskId) {
+  async function pollLoop(taskId, startAfter = 0) {
     const myGen = ++pollGen;
-    let after = 0;
+    let after = startAfter;
     let wasRunning = null; // chat 模式运行态变化检测（避免每轮重复切 hook）
     let procCollapsed = false; // 本回合过程步骤是否已折叠（终态折一次，新回合重置）
     let idleMs = 800; // chat 空闲轮询间隔（无动静翻倍退避至 4s，有动静恢复 800ms）
@@ -1471,6 +1578,7 @@ ${assetScripts}
       });
       activeTaskId = d.taskId;
       sessionStorage.setItem("dshAiTask", String(d.taskId));
+      saveSessionEntry({ sessionId: d.sessionId, taskId: d.taskId, title: task.slice(0, 10), ts: Date.now() });
       cancelRequested = false;
       setRunning(true);
       setDialogHook("on");
