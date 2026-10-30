@@ -7,7 +7,7 @@ async function load() {
   for (const f of FIELDS) {
     document.getElementById(f).value = cfg[f] ?? "";
   }
-  document.getElementById("showFx").checked = cfg.showFx === true;
+  document.getElementById("showFx").value = cfg.showFx === true ? "1" : "";
   document.getElementById("baseURLOverride").placeholder = DEFAULTS.baseURL;
   document.getElementById("tokenOverride").placeholder = "内置口令已注入";
 }
@@ -17,7 +17,7 @@ async function save() {
   for (const f of FIELDS) {
     cfg[f] = document.getElementById(f).value.trim();
   }
-  cfg.showFx = document.getElementById("showFx").checked;
+  cfg.showFx = document.getElementById("showFx").value === "1";
   await chrome.storage.local.set(cfg);
   const tip = document.getElementById("tip");
   tip.textContent = "已保存";

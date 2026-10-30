@@ -100,10 +100,11 @@
       </select>
     </div>
     <div class="field">
-      <label for="showFx" style="display: flex; align-items: center; gap: 6px">
-        <input type="checkbox" id="showFx" style="width: auto" />
-        显示模拟光标与操作特效（默认关闭，与智能等级解绑）
-      </label>
+      <label for="showFx">特效（与智能等级解绑，L1 下不生效）</label>
+      <select id="showFx" style="width: auto">
+        <option value="">关闭（静默执行）</option>
+        <option value="1">模拟光标 + 操作特效</option>
+      </select>
     </div>
     <div class="field">
       <label for="customPrompt">自定义指令（可选，随任务发给 AI 的行为要求，每行一条）</label>

@@ -1729,14 +1729,15 @@ ${assetScripts}
       <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区">
       <label>智能等级</label>
       <select class="s-scope"><option value="none">L1：仅问答（不触碰页面）</option><option value="page">L2：本页面读写（禁导航）</option><option value="site">L3：站内浏览（同域含子域可导航）</option><option value="dsh">L4：页面+DSH 工具（默认）</option>${isExt ? '<option value="all">L5：DSH 全量+浏览器全量</option>' : ""}</select>
-      <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" class="s-fx" style="width:auto"> 显示模拟光标与操作特效</label>
+      <label>特效（与智能等级解绑，L1 下不生效）</label>
+      <select class="s-fx"><option value="">关闭（静默执行）</option><option value="1">模拟光标 + 操作特效</option></select>
       <label>自定义 prompt（随任务发给 agent）</label><textarea class="s-prompt" placeholder="对当前业务页的全局要求，如输出格式、固定流程">${esc(cfg.customPrompt)}</textarea>
       <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>
       <div class="diag">面板 v${esc(PANEL_VERSION)} · 渲染核心${
         coreApi ? "已加载（DSH 管线）" : corePromise ? "加载中…" : "未加载（降级 marked 轻量渲染）"
       }</div>`;
     setboxEl.querySelector(".s-scope").value = cfg.aiLevel;
-    setboxEl.querySelector(".s-fx").checked = cfg.showFx === true;
+    setboxEl.querySelector(".s-fx").value = cfg.showFx === true ? "1" : "";
     setboxEl.hidden = false;
     // 保存即写配置覆盖（扩展=chrome.storage / 页面=localStorage，readCfg 每次请求现读，下个任务即生效）；留空 = 移除该项覆盖
     setboxEl.querySelector(".save").addEventListener("click", async () => {
@@ -1747,7 +1748,7 @@ ${assetScripts}
         workspace: v(".s-ws"),
         aiLevel: v(".s-scope"),
         customPrompt: v(".s-prompt"),
-        showFx: setboxEl.querySelector(".s-fx").checked,
+        showFx: setboxEl.querySelector(".s-fx").value === "1",
       });
       setboxEl.hidden = true;
       setStatus("已保存");
