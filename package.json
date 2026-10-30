@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-relay",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "private": true,
   "description": "DSH 与浏览器之间的通信桥：扩展任务经此在 DSH 创建会话执行，页面操作经 browser_* 工具桥接回扩展",
   "type": "module",

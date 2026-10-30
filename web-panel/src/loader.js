@@ -1356,7 +1356,7 @@ ${assetScripts}
       row.className = "srow";
       const title = document.createElement("span");
       title.className = "s-title";
-      title.textContent = entry.title || "(无标题)";
+      title.textContent = (entry.title || "").slice(0, 10) || "(无标题)"; // 行内仍显示前 10 字符
       title.title = entry.title || "";
       const id = document.createElement("span");
       id.className = "s-id";
@@ -1594,7 +1594,7 @@ ${assetScripts}
       });
       activeTaskId = d.taskId;
       sessionStorage.setItem("dshAiTask", String(d.taskId));
-      saveSessionEntry({ sessionId: d.sessionId, taskId: d.taskId, title: task.slice(0, 10), ts: Date.now() });
+      saveSessionEntry({ sessionId: d.sessionId, taskId: d.taskId, title: task.slice(0, 200), ts: Date.now() }); // 存 200 字符，列表行只显示前 10、悬停提示全文
       cancelRequested = false;
       setRunning(true);
       setDialogHook("on");
