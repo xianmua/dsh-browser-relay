@@ -1384,6 +1384,7 @@ ${assetScripts}
         if (ev.user) addUserBubble(ev.text);
         else addStep(ev.text, false, ev.md);
       }
+      collapseProcess(); // 历史回放的执行过程折叠（与 live 终态折叠口径一致），突出最终回复
       addStep(`已切换到会话 ${d.taskId}（共 ${d.events?.length ?? 0} 条记录），可直接继续输入`);
       setStatus(d.statusText || "对话中（可继续输入）");
       setRunning(false);
