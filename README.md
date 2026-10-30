@@ -135,6 +135,10 @@ netsh advfirewall firewall add rule name="dsh-browser-relay" dir=in action=allow
 - 智能等级五档：L1 仅问答（不触碰页面）/ L2 本页面读写（禁导航）/ L3 站内浏览（同域含子域可导航）/ L4 页面+DSH 工具（默认）/ L5 DSH 全量+浏览器全量（导航不限域）；档位在执行层硬拦截，越权工具调用直接拒绝
 - 「模拟光标与操作特效」为独立开关（默认关闭），开启且档位≠L1 时生效，与智能等级解绑
 
+## 版本 0.7.8 变更摘要
+
+- 归档会话可回放：重挂改为活会话快路径 + sessionController.resume 兜底（与 DSH web UI 回看同源），归档会话还能继续输入（仅 relay 改动）
+
 ## 版本 0.7.7 变更摘要
 
 - chat 空闲轮询改为服务端挂起长轮询：无新事件/提问/命令时挂 25s 等 pushEvent 唤醒，空闲请求量从 ~15 次/分钟降至 ~2.4 次/分钟（仅 relay 改动，扩展无需更新）
