@@ -62,7 +62,7 @@ export function mountPanel(init = {}) {
       [hidden] { display: none !important; }
       /* 最小化态：右缘竖向小吸附条（可上下拖动、位置记忆），点左箭头展开右侧栏 */
       .tab {
-        position: fixed; right: 0; bottom: 16px; width: 22px; height: 76px; z-index: 2147483646;
+        position: fixed; right: 0; bottom: 116px; width: 22px; height: 76px; z-index: 2147483646;
         background: #f0f0f0; color: #888; border: 1px solid #e2e2e2; border-right: none;
         border-radius: 8px 0 0 8px;
         display: flex; align-items: center; justify-content: center; cursor: grab;
@@ -92,12 +92,12 @@ export function mountPanel(init = {}) {
         from { opacity: 0; transform: translateY(-48px); }
         to { opacity: 1; transform: none; }
       }
-      /* 提问卡/追问卡/设置框停靠内容区底部（输入框上方），显示时从下淡入滑出 */
+      /* 提问卡/追问卡/设置框停靠内容区底部（输入框上方），显示时从右侧滑入（与侧栏朝向一致） */
       @keyframes rise {
-        from { opacity: 0; transform: translateY(14px); }
+        from { opacity: 0; transform: translateX(100%); }
         to { opacity: 1; transform: none; }
       }
-      .qbox, .cbox, .setbox { animation: rise .18s ease-out; }
+      .qbox, .cbox, .setbox { animation: rise .22s ease-out; }
       .header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #f0f0f0; user-select: none;
@@ -274,7 +274,7 @@ export function mountPanel(init = {}) {
       .setbox .clear { border: 1px solid #ddd; background: #fff; color: #666; }
       .setbox .diag { margin-top: 8px; color: #bbb; font-size: 11px; }
     </style>
-    <div class="tab" title="展开 AI 助手"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 6 15 12 9 18"/></svg></div>
+    <div class="tab" title="展开 AI 助手"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 6 9 12 15 18"/></svg></div>
     <!-- 最小化态即顶部抽屉标签；点箭头展开右侧全高侧栏，最小化按钮收回标签 -->
     <div class="panel" hidden>
       <div class="grip" title="拖拽调整大小"></div>
