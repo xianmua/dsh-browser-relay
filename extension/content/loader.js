@@ -83,6 +83,12 @@ Please report this to https://github.com/markedjs/marked.`,i){let m="<p>An error
         from { opacity: 0; transform: translateY(-48px); }
         to { opacity: 1; transform: none; }
       }
+      /* \u63D0\u95EE\u5361/\u8FFD\u95EE\u5361/\u8BBE\u7F6E\u6846\u505C\u9760\u5185\u5BB9\u533A\u5E95\u90E8\uFF08\u8F93\u5165\u6846\u4E0A\u65B9\uFF09\uFF0C\u663E\u793A\u65F6\u4ECE\u4E0B\u6DE1\u5165\u6ED1\u51FA */
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: none; }
+      }
+      .qbox, .cbox, .setbox { animation: rise .18s ease-out; }
       .header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #f0f0f0; user-select: none;
@@ -281,10 +287,10 @@ Please report this to https://github.com/markedjs/marked.`,i){let m="<p>An error
         </span>
       </div>
       <div class="status-line">\u6B63\u5728\u521D\u59CB\u5316\u2026</div>
+      <div class="steps"></div>
       <div class="qbox" hidden></div>
       <div class="cbox" hidden></div>
       <div class="setbox" hidden></div>
-      <div class="steps"></div>
       <div class="menu" hidden></div>
       <div class="sessbox">
         <div class="shead"><button class="sback" title="\u8FD4\u56DE">\u2039</button><span>\u5386\u53F2\u4F1A\u8BDD</span></div>

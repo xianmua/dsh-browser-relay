@@ -92,6 +92,12 @@ export function mountPanel(init = {}) {
         from { opacity: 0; transform: translateY(-48px); }
         to { opacity: 1; transform: none; }
       }
+      /* 提问卡/追问卡/设置框停靠内容区底部（输入框上方），显示时从下淡入滑出 */
+      @keyframes rise {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: none; }
+      }
+      .qbox, .cbox, .setbox { animation: rise .18s ease-out; }
       .header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #f0f0f0; user-select: none;
@@ -290,10 +296,10 @@ export function mountPanel(init = {}) {
         </span>
       </div>
       <div class="status-line">正在初始化…</div>
+      <div class="steps"></div>
       <div class="qbox" hidden></div>
       <div class="cbox" hidden></div>
       <div class="setbox" hidden></div>
-      <div class="steps"></div>
       <div class="menu" hidden></div>
       <div class="sessbox">
         <div class="shead"><button class="sback" title="返回">‹</button><span>历史会话</span></div>
