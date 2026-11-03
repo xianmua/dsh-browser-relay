@@ -71,7 +71,8 @@ export function mountPanel(init = {}) {
       .tab:hover { background: #e4e4e4; color: #555; box-shadow: 0 6px 16px rgba(0,0,0,.24); }
       .tab svg { width: 12px; height: 12px; }
       .panel {
-        position: fixed; top: 0; right: 0; height: 700px; width: 380px;
+        /* 侧边栏式：吸顶靠右，顶边往下回 8px（上下各留 8px），高度撑满视口；仅宽度可拖拽记忆 */
+        position: fixed; top: 8px; right: 0; height: calc(100vh - 16px); width: 380px;
         background: #fff; border-left: 1px solid rgba(0,0,0,.08);
         box-shadow: -8px 0 24px rgba(0,0,0,.12); z-index: 2147483647;
         display: flex; flex-direction: column; font-size: 14px; color: #333; overflow: hidden;
@@ -79,10 +80,10 @@ export function mountPanel(init = {}) {
         animation: drop .2s ease-out;
       }
       .panel.dragging { animation: none; user-select: none; }
-      /* 左下角缩放手柄：面板锚定右上角，往左拖变宽、往下拖变高（最小 380×400） */
+      /* 左下角缩放手柄：面板锚定右上角，往左拖变宽（高度固定为全视口） */
       .grip {
         position: absolute; bottom: 0; left: 0; width: 18px; height: 18px; z-index: 5;
-        cursor: nesw-resize; touch-action: none; border-radius: 0 0 0 12px;
+        cursor: ew-resize; touch-action: none; border-radius: 0 0 0 12px;
         background: repeating-linear-gradient(135deg, transparent 0 4px, #d4d4d4 4px 6px);
       }
       .grip:hover { background: repeating-linear-gradient(135deg, transparent 0 4px, #a8a8a8 4px 6px); }
@@ -130,8 +131,8 @@ export function mountPanel(init = {}) {
       .step.md img { max-width: 100%; border-radius: 6px; }
       .img-fallback { margin: 4px 0; padding: 6px 10px; font-size: 12px; color: #999; background: #fafafa; border: 1px dashed #ddd; border-radius: 6px; word-break: break-all; }
       .sessbox {
-        /* 吸顶靠右抽屉：顶边往下回一点、右缘贴边、高度 100vh；从右滑入、向右收回；宽度随面板同步（showSessions 里对齐） */
-        position: fixed; top: 8px; right: 0; height: 100vh; width: 380px; z-index: 30; background: #fff;
+        /* 吸顶靠右抽屉：几何与面板一致（top 8px、高度撑满视口上下各回 8px）；从右滑入、向右收回；宽度随面板同步（showSessions 里对齐） */
+        position: fixed; top: 8px; right: 0; height: calc(100vh - 16px); width: 380px; z-index: 30; background: #fff;
         border-left: 1px solid rgba(0,0,0,.08); box-shadow: -8px 0 24px rgba(0,0,0,.12);
         display: flex; flex-direction: column;
         transform: translateX(100%); visibility: hidden;
@@ -1809,33 +1810,29 @@ ${assetScripts}
     }
   });
 
-  // 面板几何：顶部右侧停靠（默认宽 380px、高 700px），宽高记忆（左下手柄拖拽调节，最小 380×400），localStorage
+  // 面板几何：吸顶右侧全高（上下各回 8px），仅宽度可拖拽记忆（左下手柄往左拖变宽，最小 380px），localStorage
   const GEO_KEY = "dshAiPanelGeo";
-  const MIN_W = 380, MIN_H = 400;
+  const MIN_W = 380;
   const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
   const geo = (() => {
     try { return JSON.parse(localStorage.getItem(GEO_KEY)) || {}; } catch { return {}; }
   })();
   if (geo.w) panel.style.width = clamp(Number(geo.w) || MIN_W, MIN_W, window.innerWidth - MIN_W) + "px";
-  if (geo.h) panel.style.height = clamp(Number(geo.h) || MIN_H, MIN_H, window.innerHeight - 8) + "px";
   const saveGeo = () => {
     const r = panel.getBoundingClientRect();
     try {
-      localStorage.setItem(GEO_KEY, JSON.stringify({ w: Math.round(r.width), h: Math.round(r.height) }));
+      localStorage.setItem(GEO_KEY, JSON.stringify({ w: Math.round(r.width) }));
     } catch {}
   };
   const startDrag = (e) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    const r = panel.getBoundingClientRect();
-    const w0 = r.width, h0 = r.height, x0 = e.clientX, y0 = e.clientY;
+    const w0 = panel.getBoundingClientRect().width, x0 = e.clientX;
     const maxW = () => window.innerWidth - MIN_W; // 至少给页面留 380px
-    const maxH = () => window.innerHeight - 8;
     const onMove = (ev) => {
       panel.classList.add("dragging");
-      // 左下手柄：往左拖变宽、往下拖变高，面板锚定右上角不动
+      // 左下手柄：往左拖变宽，面板锚定右上角、高度固定不动
       panel.style.width = clamp(w0 + (x0 - ev.clientX), MIN_W, maxW()) + "px";
-      panel.style.height = clamp(h0 + (ev.clientY - y0), MIN_H, maxH()) + "px";
     };
     const onUp = () => {
       window.removeEventListener("mousemove", onMove, true);
