@@ -1430,8 +1430,8 @@ ${assetScripts}
   const SESS_TOP_KEY = "dshAiSessTop";
   const sessTopClamp = (t) => Math.min(Math.max(t, 0), window.innerHeight - 60); // 就地 clamp（clamp 定义在后方，此处引用会 TDZ）
   try {
-    const t = Number(localStorage.getItem(SESS_TOP_KEY));
-    if (t >= 0) sessboxEl.style.top = sessTopClamp(t) + "px";
+    const t = parseFloat(localStorage.getItem(SESS_TOP_KEY)); // null→NaN，恰好跳过无记忆场景
+    if (Number.isFinite(t)) sessboxEl.style.top = sessTopClamp(t) + "px";
   } catch {}
   sessboxEl.querySelector(".shead").addEventListener("mousedown", (e) => {
     if (e.button !== 0 || e.target.closest(".sback")) return;
@@ -1857,9 +1857,8 @@ ${assetScripts}
   const TAB_Y_KEY = "dshAiTabY";
   const tabClamp = (top, h) => clamp(top, 0, window.innerHeight - h);
   try {
-    const y = Number(localStorage.getItem(TAB_Y_KEY));
-    if (Number.isFinite(y) && localStorage.getItem(TAB_Y_KEY) !== null)
-      tab.style.top = tabClamp(y, 22) + "px"; // 有记忆值：从 bottom 定位切换为 top 定位
+    const y = parseFloat(localStorage.getItem(TAB_Y_KEY)); // null→NaN，恰好跳过无记忆场景
+    if (Number.isFinite(y)) tab.style.top = tabClamp(y, 22) + "px"; // 有记忆值：从 bottom 定位切换为 top 定位
   } catch {}
   let tabDragged = false;
   tab.addEventListener("mousedown", (e) => {
