@@ -1077,14 +1077,14 @@ ${assetScripts}
         }
         if (!/^https?:$/.test(target.protocol))
           return { ok: false, message: "URL 必须是 http/https 绝对地址" };
-        // 同域含子域校验（L3/L4）：站点键 = hostname 末两段（IP 与单段主机名原样）
+        // 同域含子域校验（L3/L4；L5 all 导航不限域）：站点键 = hostname 末两段（IP 与单段主机名原样）
         const siteKey = (h) => {
           h = String(h ?? "").toLowerCase();
           return /^\d+\.\d+\.\d+\.\d+$/.test(h) || !h.includes(".")
             ? h
             : h.split(".").slice(-2).join(".");
         };
-        if (siteKey(target.hostname) !== siteKey(location.hostname))
+        if (cfg.aiLevel !== "all" && siteKey(target.hostname) !== siteKey(location.hostname))
           return {
             ok: false,
             message: `智能等级限制：仅允许同域（含子域）导航，目标 ${target.hostname} 与当前站点 ${location.hostname} 不同域，已拦截。`,
