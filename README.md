@@ -9,8 +9,8 @@ DSH 与浏览器之间的通信桥（cordis 插件，零第三方依赖）。浏
 前提：本机已安装并登录 DSH（`dsh` 命令可用）。
 
 ```bash
-# ① 安装 relay（按 DSH 原生插件方式；包内自带挂载声明，add 时自动登记，无需手改任何配置）
-dsh plugin --profile web add git+<插件仓库地址>
+# ① 安装 relay（npm 包，包内自带挂载声明，add 时自动登记，无需手改任何配置）
+dsh plugin --profile web add dsh-browser-relay
 
 # ② 启动 DSH（relay 随之启动，并自动生成本机口令）
 dsh web

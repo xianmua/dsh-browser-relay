@@ -1,6 +1,6 @@
 {
   "name": "dsh-browser-relay",
-  "version": "0.7.10",
+  "version": "0.7.11",
   "description": "DSH 与浏览器之间的通信桥：扩展任务经此在 DSH 创建会话执行，页面操作经 browser_* 工具桥接回扩展",
   "license": "MIT",
   "type": "module",
@@ -12,7 +12,8 @@
   "homepage": "https://xianmua.github.io/dsh-browser-relay/",
   "keywords": ["dsh", "browser", "relay", "cordis", "plugin", "automation"],
   "engines": {
-    "node": ">=18"
+    "node": ">=18",
+    "dsh": ">=0.2.1-rc.1"
   },
   "files": [
     "lib/",

@@ -210,10 +210,11 @@ export function mountPanel(init = {}) {
       .input-row { display: flex; gap: 8px; padding: 12px 14px 14px; background: #fafafa; border-top: 1px solid #f0f0f0; }
       .input-row textarea {
         flex: 1; border: 1px solid #e0e0e0; border-radius: 10px; padding: 9px 12px;
-        font-size: 14px; outline: none; background: #fff; transition: border-color .15s;
+        font-size: 14px; outline: none; background: #fff; color: #1a1a1a; transition: border-color .15s;
         resize: none; font-family: inherit; line-height: 1.5; min-height: 40px; max-height: 120px; overflow-y: auto;
         scrollbar-width: none;
       }
+      .input-row textarea::placeholder { color: #999; }
       .input-row textarea::-webkit-scrollbar { display: none; }
       .input-row textarea:focus { border-color: #1a1a1a; }
       .btn {
@@ -255,7 +256,7 @@ export function mountPanel(init = {}) {
       .qbox .qsub:disabled { background: #bbb; cursor: not-allowed; }
       .setbox { border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; padding: 8px 16px 10px; font-size: 13px; }
       .setbox label { display: block; color: #999; font-size: 12px; margin: 6px 0 2px; }
-      .setbox input, .setbox select, .setbox textarea { width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 13px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; }
+      .setbox input, .setbox select, .setbox textarea { width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 13px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; background: #fff; color: #1a1a1a; color-scheme: light; }
       .setbox textarea { resize: vertical; min-height: 56px; }
       .setbox .row2 { display: flex; gap: 8px; margin-top: 8px; }
       .setbox .row2 button { flex: 1; padding: 6px 0; font-size: 13px; border-radius: 6px; cursor: pointer; }
