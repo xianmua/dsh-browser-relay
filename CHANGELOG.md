@@ -2,6 +2,10 @@
 
 各版本变更摘要（新版本在上）。安装与使用说明见 [README.md](README.md)。
 
+## 版本 0.7.19 变更摘要（待发布）
+
+- 彻底修复 relay 重启/归档会话无法加载：重挂改用 `sessionController.resolveAgent()`（返回 `{agent}` 包装）拉起活会话，历史事件改用 `sessionController.inspect()` 读持久化完整事件前缀（旧 `resume()` API 不存在，导致 0.7.8 起重挂从未真正成功），inspect 失败再回退 session 多形态探测
+
 ## 版本 0.7.18 变更摘要（待发布）
 
 - 修复 relay 重启/归档会话加载后历史为空：重挂事件流多形态探测（新版 `seq`+`eventAt`、旧版 `eventList()` / `events` 数组），并打印不可读时的 session 形态诊断日志，便于跨 DSH 版本定位
