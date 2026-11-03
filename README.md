@@ -46,6 +46,7 @@ dsh web
 ```
 
 - 属性优先级：设置面板本机覆盖 > `data-*` 注入 > 默认值；`data-workspace` 可省（留空则会话不分组）；`data-ai-level` 可省（智能等级 L1-L5 或 none/page/site/dsh/all，默认 L4）
+- `data-token` 也可完全省略（代理鉴权模式）：面板请求不带凭据，由后端代理在转发时统一注入 `Authorization: Bearer <口令>`（`/file` 图片路由一并注入或放行），口令不暴露给页面访客，适合多人使用的业务系统
 - 由 relay 托管面板脚本（IIFE 打包产物，仓库内 `panel/` 目录），连 `npm install` 都不用；relay 更新后刷新页面即拿到新版
 - 也可省略 `data-token`，由页面 JS 调 `DshAssistant.mountPanel({ baseURL, apiKey, workspace })` 手动挂载
 - 面板与扩展**单一源码**（`web-panel/src/`，经 env.js 适配层 + esbuild 双构建）；改码后 `npm run build` 一次产出 `panel/dsh-assistant.min.js` 与 `extension/content/loader.js`

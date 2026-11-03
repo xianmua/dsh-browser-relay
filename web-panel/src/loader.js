@@ -526,7 +526,8 @@ ${assetScripts}
       if (!src || /^(https?:|data:|blob:)/i.test(src)) continue;
       if (img.dataset.localRewritten) continue;
       img.dataset.localRewritten = "1";
-      img.src = `${base}/file?taskId=${activeTaskId}&p=${encodeURIComponent(src)}&token=${encodeURIComponent(cfg.apiKey)}`;
+      // 代理鉴权模式（token 空）同样省略 token 参数：图片路由由代理注入口令或自行放行
+      img.src = `${base}/file?taskId=${activeTaskId}&p=${encodeURIComponent(src)}${cfg.apiKey ? `&token=${encodeURIComponent(cfg.apiKey)}` : ""}`;
       img.onerror = () => {
         img.onerror = null;
         if (!img.isConnected) return;
@@ -710,7 +711,9 @@ ${assetScripts}
     const r = await fetch(`${cfg.baseURL}${path}`, {
       ...opts,
       headers: {
-        authorization: `Bearer ${cfg.apiKey}`,
+        ...(cfg.apiKey
+          ? { authorization: `Bearer ${cfg.apiKey}` }
+          : {}), // token 留空 = 代理鉴权模式：凭据由后端代理统一注入，前端不暴露口令
         ...(opts.body ? { "content-type": "application/json" } : {}),
       },
     });
