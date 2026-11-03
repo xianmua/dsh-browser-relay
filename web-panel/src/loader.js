@@ -75,6 +75,7 @@ export function mountPanel(init = {}) {
         background: #fff; border-left: 1px solid rgba(0,0,0,.08);
         box-shadow: -8px 0 24px rgba(0,0,0,.12); z-index: 2147483647;
         display: flex; flex-direction: column; font-size: 14px; color: #333; overflow: hidden;
+        scrollbar-width: thin; scrollbar-color: #d4d4d8 transparent; /* Firefox 细滚动条（继承到子滚动区） */
         animation: drop .2s ease-out;
       }
       .panel.dragging { animation: none; user-select: none; }
@@ -107,8 +108,11 @@ export function mountPanel(init = {}) {
         flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 12px;
         color: #555; font-size: 13px; line-height: 1.9; white-space: pre-wrap; word-break: break-all;
       }
-      .steps::-webkit-scrollbar { width: 4px; }
-      .steps::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
+      /* 全面板细滚动条（shadow DOM 内，不影响宿主页面）：thumb 视觉 4px 圆角、悬停加深、轨道透明；Firefox 走 scrollbar-width/color 继承 */
+      .panel *::-webkit-scrollbar, .panel::-webkit-scrollbar { width: 6px; height: 6px; }
+      .panel *::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 3px; border: 1px solid transparent; background-clip: padding-box; }
+      .panel *::-webkit-scrollbar-thumb:hover { background: #b6bac0; border: 1px solid transparent; background-clip: padding-box; }
+      .panel *::-webkit-scrollbar-track, .panel *::-webkit-scrollbar-corner { background: transparent; }
       .steps .step { padding: 4px 0; border-bottom: 1px solid #f7f7f7; }
       .step.md { white-space: normal; word-break: break-word; line-height: 1.6; font-size: 13px; }
       .step.md p, .step.md ul, .step.md pre { margin: 4px 0; }
@@ -138,8 +142,6 @@ export function mountPanel(init = {}) {
       .sessbox .sback { width: 24px; height: 24px; border: none; background: none; cursor: pointer; color: #999; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 16px; line-height: 1; }
       .sessbox .sback:hover { color: #333; background: #f0f0f0; }
       .sessbox .slist { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px; }
-      .sessbox .slist::-webkit-scrollbar { width: 4px; }
-      .sessbox .slist::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
       .sessbox .empty { padding: 24px 10px; color: #999; font-size: 12px; text-align: center; }
       .srow { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 8px; border-bottom: 1px solid #f5f5f5; cursor: pointer; font-size: 12px; border-radius: 4px; }
       .srow:hover { background: #f0f6ff; }
@@ -196,8 +198,6 @@ export function mountPanel(init = {}) {
         color: #aaa; font-size: 12px; padding: 0 0 4px 10px;
         max-height: 180px; overflow-y: auto;
       }
-      details.think .think-body::-webkit-scrollbar { width: 4px; }
-      details.think .think-body::-webkit-scrollbar-thumb { background: #ddd; border-radius: 2px; }
       details.proc-box { border-bottom: 1px solid #f0f0f0; padding: 2px 0; }
       details.proc-box summary {
         cursor: pointer; color: #999; font-size: 12px; line-height: 1.9;
