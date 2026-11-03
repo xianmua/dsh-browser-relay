@@ -77,8 +77,11 @@ export function mountPanel(init = {}) {
         background: #fff; border-left: 1px solid rgba(0,0,0,.08);
         box-shadow: -8px 0 24px rgba(0,0,0,.12); z-index: 2147483647;
         display: flex; flex-direction: column; font-size: 14px; color: #333; overflow: hidden;
-        scrollbar-width: thin; scrollbar-color: #d4d4d8 transparent; /* Firefox 细滚动条（继承到子滚动区） */
         animation: drop .2s ease-out;
+      }
+      /* Firefox 细滚动条：标准属性会禁用 Chromium 的 ::-webkit-scrollbar 自定义（回归粗条），必须隔离在 -moz 块内 */
+      @-moz-document url-prefix() {
+        .panel { scrollbar-width: thin; scrollbar-color: #c9ccd2 transparent; }
       }
       .panel.dragging { animation: none; user-select: none; }
       /* 左下角缩放手柄：面板锚定右上角，往左拖变宽（高度固定为全视口） */
@@ -116,10 +119,10 @@ export function mountPanel(init = {}) {
         flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 12px;
         color: #555; font-size: 13px; line-height: 1.9; white-space: pre-wrap; word-break: break-all;
       }
-      /* 全面板细滚动条（shadow DOM 内，不影响宿主页面）：thumb 视觉 4px 圆角、悬停加深、轨道透明；Firefox 走 scrollbar-width/color 继承 */
-      .panel *::-webkit-scrollbar, .panel::-webkit-scrollbar { width: 6px; height: 6px; }
-      .panel *::-webkit-scrollbar-thumb { background: #d4d4d8; border-radius: 3px; border: 1px solid transparent; background-clip: padding-box; }
-      .panel *::-webkit-scrollbar-thumb:hover { background: #b6bac0; border: 1px solid transparent; background-clip: padding-box; }
+      /* 全面板细滚动条（shadow DOM 内，不影响宿主页面）：thumb 视觉 2px 圆角、悬停加深、轨道透明 */
+      .panel *::-webkit-scrollbar, .panel::-webkit-scrollbar { width: 4px; height: 4px; }
+      .panel *::-webkit-scrollbar-thumb { background: #c9ccd2; border-radius: 2px; border: 1px solid transparent; background-clip: padding-box; }
+      .panel *::-webkit-scrollbar-thumb:hover { background: #a8acb4; border: 1px solid transparent; background-clip: padding-box; }
       .panel *::-webkit-scrollbar-track, .panel *::-webkit-scrollbar-corner { background: transparent; }
       .steps .step { padding: 4px 0; border-bottom: 1px solid #f7f7f7; }
       .step.md { white-space: normal; word-break: break-word; line-height: 1.6; font-size: 13px; }
@@ -336,6 +339,7 @@ export function mountPanel(init = {}) {
     inputEl.disabled = running;
   }
   let curThink = null; // 连续思考行的折叠组（DSH 风格：收起一行摘要，点开看片段）
+  let replayCollapsed = false; // 会话回放加载后：新回合的过程行直接收进「执行过程」折叠条（对齐 DSH web UI 观感）
   // markdown 渲染：marked + DOMPurify（README 级：表格/嵌套列表/引用块等）；链接强制新标签打开
   DOMPurify.addHook("afterSanitizeAttributes", (node) => {
     if (node.tagName === "A") {
@@ -417,6 +421,23 @@ ${assetScripts}
     stepsEl.appendChild(el);
     stepsEl.scrollTop = stepsEl.scrollHeight;
   }
+  // 过程行收进最后一个「执行过程」折叠条（无则新建）；回放后新回合的过程行走这里，面板保持聚焦最终回复
+  function appendProcessRow(el) {
+    let det = [...stepsEl.querySelectorAll(".proc-box")].pop();
+    if (!det) {
+      det = document.createElement("details");
+      det.className = "proc-box";
+      const sum = document.createElement("summary");
+      sum.textContent = "执行过程";
+      const body = document.createElement("div");
+      body.className = "proc-body";
+      det.append(sum, body);
+      stepsEl.insertBefore(det, stepsEl.firstChild);
+    }
+    const body = det.querySelector(".proc-body");
+    body.appendChild(el);
+    det.querySelector("summary").textContent = `执行过程（${body.children.length} 步）`;
+  }
   function addStep(text, isError = false, md = false) {
     if (!isError && /^(思考：|模型推理中…)/.test(text)) {
       if (!curThink || !curThink.isConnected) {
@@ -427,7 +448,7 @@ ${assetScripts}
         const body = document.createElement("div");
         body.className = "think-body";
         det.append(sum, body);
-        stepsEl.appendChild(det);
+        replayCollapsed ? appendProcessRow(det) : stepsEl.appendChild(det);
         curThink = det;
       }
       const line = document.createElement("div");
@@ -443,7 +464,7 @@ ${assetScripts}
     div.className = isError ? "step err" : md ? "step md" : "step";
     // 先入列再渲染：async 函数首个 await 前同步执行，若先调 renderMdCore，
     // core 已预加载时会同步跑完 isConnected 检查（此时 div 还没挂进文档，恒为离场）直接跳过渲染
-    stepsEl.appendChild(div);
+    replayCollapsed && !isError && !md ? appendProcessRow(div) : stepsEl.appendChild(div);
     if (md) {
       // 首选：DSH 原版渲染核心（按需加载 core 产物）；失败/不可用降级 marked 轻量管线
       renderMdCore(div, text)
@@ -1209,6 +1230,7 @@ ${assetScripts}
     activeTaskId = 0;
     cancelRequested = false;
     chatMode = false;
+    replayCollapsed = false; // 新任务恢复正常流动视图（首回合过程行平铺可见）
     sessionStorage.removeItem("dshAiTask");
     setRunning(false);
     setDialogHook("off");
@@ -1412,6 +1434,7 @@ ${assetScripts}
         else addStep(ev.text, false, ev.md);
       }
       collapseProcess(); // 历史回放的执行过程折叠（与 live 终态折叠口径一致），突出最终回复
+      replayCollapsed = true; // 此后新回合的过程行直接收进折叠条（对齐 DSH web UI 观感），直到开新会话
       addStep(`已切换到会话 ${d.taskId}（共 ${d.events?.length ?? 0} 条记录），可直接继续输入`);
       setStatus(d.statusText || "对话中（可继续输入）");
       setRunning(false);
