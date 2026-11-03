@@ -126,9 +126,11 @@ export function mountPanel(init = {}) {
       .step.md img { max-width: 100%; border-radius: 6px; }
       .img-fallback { margin: 4px 0; padding: 6px 10px; font-size: 12px; color: #999; background: #fafafa; border: 1px dashed #ddd; border-radius: 6px; word-break: break-all; }
       .sessbox {
-        position: absolute; inset: 0; z-index: 30; background: #fff;
+        /* 吸顶靠右抽屉：顶边往下回一点、右缘贴边、高度 100vh；从右滑入、向右收回；宽度随面板同步（showSessions 里对齐） */
+        position: fixed; top: 8px; right: 0; height: 100vh; width: 380px; z-index: 30; background: #fff;
+        border-left: 1px solid rgba(0,0,0,.08); box-shadow: -8px 0 24px rgba(0,0,0,.12);
         display: flex; flex-direction: column;
-        transform: translateX(-100%); visibility: hidden;
+        transform: translateX(100%); visibility: hidden;
         transition: transform .22s cubic-bezier(.22,1,.36,1), visibility .22s;
       }
       .sessbox.show { transform: translateX(0); visibility: visible; }
@@ -1370,7 +1372,8 @@ ${assetScripts}
       row.addEventListener("click", () => loadSession(entry));
       sessListEl.appendChild(row);
     }
-    sessboxEl.classList.add("show"); // 全面板覆盖层：从左滑出盖住内容区
+    sessboxEl.style.width = panel.getBoundingClientRect().width + "px"; // 宽度对齐面板（面板可拖宽）
+    sessboxEl.classList.add("show"); // 右侧抽屉：从右滑入盖住面板（收回向右）
   }
   // 切换到历史会话：拉取历史回放（relay 会按 sessionId 重挂被清理的记录），此后与 live 会话无异（可续聊/可操作页面）
   async function loadSession(entry) {
