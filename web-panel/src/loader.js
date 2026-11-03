@@ -235,10 +235,10 @@ export function mountPanel(init = {}) {
       .menu button .l { flex: 0 1 70%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .menu .g { flex: 1 1 30%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #999; font-size: 12px; text-align: right; }
       .menu .head { padding: 6px 16px 2px; color: #999; font-size: 12px; }
-      .qbox { border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; padding: 8px 16px 10px; font-size: 13px; max-height: 40%; overflow-y: auto; }
-      .cbox { border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; padding: 8px 16px 10px; font-size: 13px; }
+      .qbox { border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; padding: 8px 16px 10px; font-size: 13px; max-height: 40%; overflow-y: auto; background: #f6f8fb; color: #333; }
+      .cbox { border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; padding: 8px 16px 10px; font-size: 13px; background: #f6f8fb; color: #333; }
       .cbox .ct { margin: 2px 0 8px; }
-      .qbox .qh { color: #999; font-size: 12px; margin: 4px 0 2px; }
+      .qbox .qh { color: #8a94a6; font-size: 12px; margin: 4px 0 2px; }
       .qbox .qt { margin: 2px 0 6px; }
       .qbox .qopt, .cbox .qopt {
         display: block; width: 100%; text-align: left; margin: 0 0 6px; padding: 5px 10px; font-size: 12px;
