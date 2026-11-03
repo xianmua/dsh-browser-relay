@@ -102,7 +102,7 @@ Please report this to https://github.com/markedjs/marked.`,i){let m="<p>An error
       .settings:hover, .collapse:hover { color: #333; background: #f0f0f0; }
       .sessions:hover, .newchat:hover { color: #333; background: #f0f0f0; }
       .settings svg, .collapse svg, .newchat svg, .sessions svg { width: 14px; height: 14px; }
-      .status-line { padding: 9px 16px; font-size: 13px; color: #888; border-bottom: 1px solid #f5f5f5; min-height: 36px; }
+      .status-line { display: none; } /* \u72B6\u6001\u680F\u53D6\u6D88\u5C55\u793A\uFF1A\u9519\u8BEF\u63D0\u793A\u8D70\u6D88\u606F\u6D41\uFF0C\u8FD0\u884C\u6001\u770B\u6267\u884C/\u505C\u6B62\u6309\u94AE\u4E0E\u6B65\u9AA4\u6D41 */
       .steps {
         flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 12px;
         color: #555; font-size: 13px; line-height: 1.9; white-space: pre-wrap; word-break: break-all;

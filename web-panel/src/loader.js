@@ -111,7 +111,7 @@ export function mountPanel(init = {}) {
       .settings:hover, .collapse:hover { color: #333; background: #f0f0f0; }
       .sessions:hover, .newchat:hover { color: #333; background: #f0f0f0; }
       .settings svg, .collapse svg, .newchat svg, .sessions svg { width: 14px; height: 14px; }
-      .status-line { padding: 9px 16px; font-size: 13px; color: #888; border-bottom: 1px solid #f5f5f5; min-height: 36px; }
+      .status-line { display: none; } /* 状态栏取消展示：错误提示走消息流，运行态看执行/停止按钮与步骤流 */
       .steps {
         flex: 1; min-height: 0; overflow-y: auto; padding: 8px 16px 12px;
         color: #555; font-size: 13px; line-height: 1.9; white-space: pre-wrap; word-break: break-all;
