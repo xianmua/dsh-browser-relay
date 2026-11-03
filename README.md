@@ -142,3 +142,7 @@ netsh advfirewall firewall add rule name="dsh-browser-relay" dir=in action=allow
 ## 版本变更记录
 
 各版本变更摘要见 [CHANGELOG.md](CHANGELOG.md)。
+
+## License
+
+[MIT](LICENSE)。本仓库捆绑的第三方组件：`extension/vendor/page-agent.js` 基于 page-agent 与 browser-use DOM 组件（MIT），打包时包含 zod（MIT），原始版权声明保留在对应文件头部。

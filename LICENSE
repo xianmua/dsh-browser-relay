@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-Third-party components bundled in this repository:
-
-- extension/vendor/page-agent.js: based on page-agent and browser-use DOM
-  components (MIT License), bundled with zod (MIT License). Original copyright
-  notices are preserved in the file headers.
