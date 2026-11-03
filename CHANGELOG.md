@@ -2,12 +2,15 @@
 
 各版本变更摘要（新版本在上）。安装与使用说明见 [README.md](README.md)。
 
-## 版本 0.7.11 变更摘要（待发布）
+## 版本 0.7.12 变更摘要（待发布）
 
 - 新增 `engines.dsh` 声明（`>=0.2.1-rc.1`），适配 DSH 插件市场按 engines 识别收录
 - README 安装命令改为 npm 包方式：`dsh plugin --profile web add dsh-browser-relay`
-- 修复深色宿主页下面板输入框文字变白：表单控件显式锁定浅色主题（color + color-scheme）
+- 修复深色宿主页面板输入框文字变白：表单控件显式锁定浅色主题（color + color-scheme）
 - 提问卡/追问卡增加浅色底衬（#f6f8fb），与消息区视觉区分
+- 会话列表改吸顶右侧抽屉：fixed 吸顶往下回 8px、右缘贴边、高度 100vh、宽度随面板同步，动画从右滑入/向右收回（原全面板左盖式）
+- 会话抽屉支持上下拖动：按住标题栏调 top（0~视口高-60），位置 localStorage 记忆
+- 面板滚动条统一精致化：全部滚动区细滚动条（thumb 视觉 4px 圆角、悬停加深、透明轨道，Firefox 走 thin 继承）
 - 修复回合结束后面板长时间停留「执行中」：0.7.7 长轮询挂起后回合终态未唤醒挂起的 poll，最长等 25s 才切回发送态；终态分支补 wakePoll 立即唤醒
 - 修复 L4 档 DSH 原生工具被误拦：执行层守卫把 dsh 档当 site 档处理，office_read 等全部 deny，与 prompt「L4 可用 DSH 插件工具取数」自相矛盾；现 L4/L5 均放行 DSH 工具，差异收敛到导航域校验
 - 修复 L5 档跨域导航被误拦：扩展侧 browser_navigate 同域校验未区分档位，补 L5（all）豁免，与「L5 导航不限域」定义对齐
