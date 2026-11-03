@@ -60,11 +60,11 @@ export function mountPanel(init = {}) {
     <style>
       * { box-sizing: border-box; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
       [hidden] { display: none !important; }
-      /* 最小化态：右下角停靠圆标（可上下拖动、位置记忆、不出页面），点击展开右侧栏 */
+      /* 最小化态：右下角小吸附条（原顶部停靠条样式，仅换到右缘），可上下拖动、位置记忆，点击展开右侧栏 */
       .tab {
-        position: fixed; bottom: 16px; right: 16px; width: 44px; height: 28px; z-index: 2147483646;
-        background: #f0f0f0; color: #888; border: 1px solid #e2e2e2;
-        border-radius: 14px;
+        position: fixed; right: 0; bottom: 16px; width: 76px; height: 22px; z-index: 2147483646;
+        background: #f0f0f0; color: #888; border: 1px solid #e2e2e2; border-right: none;
+        border-radius: 8px 0 0 8px;
         display: flex; align-items: center; justify-content: center; cursor: grab;
         box-shadow: 0 4px 12px rgba(0,0,0,.18); transition: background .15s ease, box-shadow .15s ease;
       }
@@ -1859,7 +1859,7 @@ ${assetScripts}
   try {
     const y = Number(localStorage.getItem(TAB_Y_KEY));
     if (Number.isFinite(y) && localStorage.getItem(TAB_Y_KEY) !== null)
-      tab.style.top = tabClamp(y, 28) + "px"; // 有记忆值：从 bottom 定位切换为 top 定位
+      tab.style.top = tabClamp(y, 22) + "px"; // 有记忆值：从 bottom 定位切换为 top 定位
   } catch {}
   let tabDragged = false;
   tab.addEventListener("mousedown", (e) => {
@@ -1886,7 +1886,7 @@ ${assetScripts}
   });
   window.addEventListener("resize", () => {
     // 窗口变矮后把标签拉回页面内
-    if (tab.style.top) tab.style.top = tabClamp(parseFloat(tab.style.top), 28) + "px";
+    if (tab.style.top) tab.style.top = tabClamp(parseFloat(tab.style.top), 22) + "px";
   });
   tab.addEventListener("click", () => {
     if (tabDragged) {
