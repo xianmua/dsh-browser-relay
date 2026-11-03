@@ -134,7 +134,7 @@ export function mountPanel(init = {}) {
         transition: transform .22s cubic-bezier(.22,1,.36,1), visibility .22s;
       }
       .sessbox.show { transform: translateX(0); visibility: visible; }
-      .sessbox .shead { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #f0f0f0; font-size: 13px; font-weight: 600; color: #444; }
+      .sessbox .shead { display: flex; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid #f0f0f0; font-size: 13px; font-weight: 600; color: #444; cursor: ns-resize; user-select: none; }
       .sessbox .sback { width: 24px; height: 24px; border: none; background: none; cursor: pointer; color: #999; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 16px; line-height: 1; }
       .sessbox .sback:hover { color: #333; background: #f0f0f0; }
       .sessbox .slist { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 8px; }
@@ -1414,6 +1414,31 @@ ${assetScripts}
   }
   $(".sessions").addEventListener("click", toggleSessions);
   sessboxEl.querySelector(".sback").addEventListener("click", hideSessions);
+
+  // 会话抽屉吸顶位置上下拖动：按住标题栏改 top（0 ~ 视口高-60），位置记忆
+  const SESS_TOP_KEY = "dshAiSessTop";
+  const sessTopClamp = (t) => Math.min(Math.max(t, 0), window.innerHeight - 60); // 就地 clamp（clamp 定义在后方，此处引用会 TDZ）
+  try {
+    const t = Number(localStorage.getItem(SESS_TOP_KEY));
+    if (t >= 0) sessboxEl.style.top = sessTopClamp(t) + "px";
+  } catch {}
+  sessboxEl.querySelector(".shead").addEventListener("mousedown", (e) => {
+    if (e.button !== 0 || e.target.closest(".sback")) return;
+    e.preventDefault();
+    const y0 = e.clientY;
+    const t0 = sessboxEl.getBoundingClientRect().top;
+    const onMove = (ev) =>
+      (sessboxEl.style.top = sessTopClamp(Math.round(t0 + ev.clientY - y0)) + "px");
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove, true);
+      window.removeEventListener("mouseup", onUp, true);
+      try {
+        localStorage.setItem(SESS_TOP_KEY, String(Math.round(parseFloat(sessboxEl.style.top))));
+      } catch {}
+    };
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("mouseup", onUp, true);
+  });
 
   // 「+」开新会话：断开当前任务绑定（终止轮询），下一条输入新建任务会话；旧会话仍可在 DSH web UI 回看
   function newChat() {
