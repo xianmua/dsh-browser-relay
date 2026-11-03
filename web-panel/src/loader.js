@@ -1461,7 +1461,6 @@ ${assetScripts}
     resetTask();
     if (coreApi) for (const el of stepsEl.children) coreApi.unmountDshRd(el); // 卸载 DSH 渲染的 React root
     stepsEl.replaceChildren();
-    addStep("已开新会话：下一条输入将新建任务（旧会话可在 DSH web UI 回看）");
     setStatus("空闲（输入即新任务）");
   }
 
