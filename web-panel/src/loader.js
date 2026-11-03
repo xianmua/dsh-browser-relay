@@ -60,14 +60,15 @@ export function mountPanel(init = {}) {
     <style>
       * { box-sizing: border-box; font-family: "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
       [hidden] { display: none !important; }
-      /* 最小化态：页面右上角（距右边 100px）的浅灰停靠条，点向下箭头展开右侧栏 */
+      /* 最小化态：右下角停靠圆标（可上下拖动、位置记忆、不出页面），点击展开右侧栏 */
       .tab {
-        position: fixed; top: 0; right: 100px; width: 76px; height: 22px; z-index: 2147483646;
-        background: #f0f0f0; color: #888; border: 1px solid #e2e2e2; border-top: none;
-        border-radius: 0 0 8px 8px;
-        display: flex; align-items: center; justify-content: center; cursor: pointer;
+        position: fixed; bottom: 16px; right: 16px; width: 44px; height: 28px; z-index: 2147483646;
+        background: #f0f0f0; color: #888; border: 1px solid #e2e2e2;
+        border-radius: 14px;
+        display: flex; align-items: center; justify-content: center; cursor: grab;
         box-shadow: 0 4px 12px rgba(0,0,0,.18); transition: background .15s ease, box-shadow .15s ease;
       }
+      .tab:active { cursor: grabbing; }
       .tab:hover { background: #e4e4e4; color: #555; box-shadow: 0 6px 16px rgba(0,0,0,.24); }
       .tab svg { width: 12px; height: 12px; }
       .panel {
@@ -1846,7 +1847,46 @@ ${assetScripts}
   $(".grip").addEventListener("mousedown", startDrag);
 
   const tab = $(".tab");
+  // 停靠标签：默认右下角，可上下拖动（范围限制在页面内），位置 localStorage 记忆；拖动后松手不触发展开
+  const TAB_Y_KEY = "dshAiTabY";
+  const tabClamp = (top, h) => clamp(top, 0, window.innerHeight - h);
+  try {
+    const y = Number(localStorage.getItem(TAB_Y_KEY));
+    if (Number.isFinite(y) && localStorage.getItem(TAB_Y_KEY) !== null)
+      tab.style.top = tabClamp(y, 28) + "px"; // 有记忆值：从 bottom 定位切换为 top 定位
+  } catch {}
+  let tabDragged = false;
+  tab.addEventListener("mousedown", (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const r = tab.getBoundingClientRect();
+    const y0 = e.clientY, top0 = r.top;
+    let moved = false;
+    const onMove = (ev) => {
+      if (Math.abs(ev.clientY - y0) > 3) moved = true;
+      tab.style.top = tabClamp(top0 + (ev.clientY - y0), r.height) + "px";
+      tab.style.bottom = "auto";
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove, true);
+      window.removeEventListener("mouseup", onUp, true);
+      if (moved) {
+        tabDragged = true; // click 在 mouseup 后触发：刚拖动完这几次点击不当成展开
+        try { localStorage.setItem(TAB_Y_KEY, String(Math.round(parseFloat(tab.style.top)))); } catch {}
+      }
+    };
+    window.addEventListener("mousemove", onMove, true);
+    window.addEventListener("mouseup", onUp, true);
+  });
+  window.addEventListener("resize", () => {
+    // 窗口变矮后把标签拉回页面内
+    if (tab.style.top) tab.style.top = tabClamp(parseFloat(tab.style.top), 28) + "px";
+  });
   tab.addEventListener("click", () => {
+    if (tabDragged) {
+      tabDragged = false;
+      return;
+    }
     tab.hidden = true;
     panel.hidden = false;
     // 最小化期间渲染的内容当时因 display:none 跳过了可见性校验，展开后补查一次
