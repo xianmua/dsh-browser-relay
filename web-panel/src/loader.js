@@ -230,6 +230,17 @@ export function mountPanel(init = {}) {
       .input-row textarea::placeholder { color: #999; }
       .input-row textarea::-webkit-scrollbar { display: none; }
       .input-row textarea:focus { border-color: #1a1a1a; }
+      /* 附件预览条：粘贴的图片缩略图/文件名 chip，发送前可单个移除 */
+      .attach-bar { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px 0; background: #fafafa; }
+      .att {
+        position: relative; display: inline-flex; align-items: center; gap: 4px; padding: 3px 6px;
+        background: #fff; border: 1px solid #e2e2e2; border-radius: 8px; font-size: 12px; color: #555;
+        max-width: 100%;
+      }
+      .att img { width: 42px; height: 42px; object-fit: cover; border-radius: 5px; display: block; }
+      .att-name { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .att-x { border: none; background: none; cursor: pointer; color: #999; font-size: 14px; line-height: 1; padding: 0 0 0 2px; }
+      .att-x:hover { color: #c5221f; }
       .btn {
         border: none; background: #1a1a1a; color: #fff;
         border-radius: 10px; padding: 9px 18px; cursor: pointer; font-size: 14px; transition: background .15s;
@@ -308,6 +319,7 @@ export function mountPanel(init = {}) {
         <div class="shead"><button class="sback" title="返回">‹</button><span>历史会话</span></div>
         <div class="slist"></div>
       </div>
+      <div class="attach-bar" hidden></div>
       <div class="input-row">
         <textarea rows="1" placeholder="输入任务（「记住：xxx」沉淀经验）"></textarea>
         <button class="btn run">执行</button>
@@ -328,6 +340,98 @@ export function mountPanel(init = {}) {
   const inputEl = $(".input-row textarea");
   const runBtn = $(".btn.run");
   const stopBtn = $(".btn.stop");
+  const attachBar = $(".attach-bar");
+
+  // ---------- 附件：粘贴图片/文件 → 预览条 → 发送时上传落盘工作区，路径引用拼进任务文本 ----------
+  let attach = []; // { file, name, img(blob 预览 URL，非图片为 null) }
+  const ATTACH_MAX = 6; // 单条消息最多附件数（后端另有单文件 20MB 上限）
+  function renderAttach() {
+    attachBar.hidden = !attach.length;
+    attachBar.replaceChildren();
+    for (const a of attach) {
+      const chip = document.createElement("div");
+      chip.className = "att";
+      if (a.img) {
+        const im = document.createElement("img");
+        im.src = a.img;
+        im.alt = a.name;
+        chip.appendChild(im);
+      } else {
+        const n = document.createElement("span");
+        n.className = "att-name";
+        n.textContent = a.name;
+        n.title = a.name;
+        chip.appendChild(n);
+      }
+      const x = document.createElement("button");
+      x.className = "att-x";
+      x.textContent = "×";
+      x.title = "移除附件";
+      x.addEventListener("click", () => {
+        if (a.img) URL.revokeObjectURL(a.img);
+        attach = attach.filter((v) => v !== a);
+        renderAttach();
+      });
+      chip.appendChild(x);
+      attachBar.appendChild(chip);
+    }
+  }
+  function clearAttach() {
+    for (const a of attach) if (a.img) URL.revokeObjectURL(a.img);
+    attach = [];
+    renderAttach();
+  }
+  inputEl.addEventListener("paste", (e) => {
+    const files = [...(e.clipboardData?.items ?? [])]
+      .filter((it) => it.kind === "file")
+      .map((it) => it.getAsFile())
+      .filter(Boolean);
+    if (!files.length) return;
+    e.preventDefault(); // 附件走预览条，文本内容不拦（无文件时保持系统粘贴行为）
+    for (const f of files) {
+      if (attach.length >= ATTACH_MAX) {
+        setStatus(`一次最多 ${ATTACH_MAX} 个附件`);
+        break;
+      }
+      const img = f.type.startsWith("image/");
+      attach.push({
+        file: f,
+        name: f.name || (img ? "粘贴图片.png" : "粘贴文件"),
+        img: img ? URL.createObjectURL(f) : null,
+      });
+    }
+    renderAttach();
+  });
+  async function uploadFile(file, taskId) {
+    const cfg = await readCfg();
+    const q = new URLSearchParams({ filename: file.name || "" });
+    if (taskId) q.set("taskId", String(taskId)); // 续聊：以会话工作区为准
+    else q.set("workspace", cfg.workspace || "");
+    const r = await fetch(`${cfg.baseURL}/upload?${q}`, {
+      method: "POST",
+      headers: cfg.apiKey ? { authorization: `Bearer ${cfg.apiKey}` } : {},
+      body: file,
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(d?.error?.message || `HTTP ${r.status}`);
+    return String(d.path ?? "");
+  }
+  // 发送前上传全部附件，返回拼进任务文本的路径引用块；全部成功才清预览条（失败保留可重试）
+  async function flushAttachments(taskId) {
+    if (!attach.length) return "";
+    const lines = [];
+    try {
+      for (const a of attach) {
+        const rel = await uploadFile(a.file, taskId);
+        lines.push(`- ${a.img ? "图片" : "文件"}（${a.name}）：${rel}`);
+      }
+    } catch (e) {
+      setStatus(`附件上传失败：${e.message}`);
+      return null;
+    }
+    clearAttach();
+    return `\n\n[附件已保存到工作区，以下路径相对工作区根目录，请用文件读取工具逐个查看后结合内容处理任务]\n${lines.join("\n")}`;
+  }
 
   function setStatus(text) {
     statusEl.textContent =
@@ -1482,6 +1586,7 @@ ${assetScripts}
     }
     pollGen++; // 旧轮询循环检测到代际变化自行退出
     resetTask();
+    clearAttach(); // 清掉未发送的粘贴附件（blob 预览一并释放）
     if (coreApi) for (const el of stepsEl.children) coreApi.unmountDshRd(el); // 卸载 DSH 渲染的 React root
     stepsEl.replaceChildren();
     setStatus("空闲（输入即新任务）");
@@ -1568,7 +1673,8 @@ ${assetScripts}
 
   let chatMode = false; // 会话模式：当前任务为 relay 常驻 chat，输入走 /task/:id/message 续聊
   async function run() {
-    const task = inputEl.value.trim();
+    let task = inputEl.value.trim();
+    if (!task && attach.length) task = "请查看附件内容并处理"; // 纯附件发送：给 agent 一句指令
     if (!task) return;
     inputEl.value = "";
     autoGrow();
@@ -1613,11 +1719,13 @@ ${assetScripts}
     if (chatMode && activeTaskId) {
       // 会话续聊：同一会话提交新回合（可追问、可继续操作页面）
       try {
+        const att = await flushAttachments(activeTaskId);
+        if (att === null) return; // 附件上传失败：预览条保留，不提交
         cancelRequested = false;
         setDialogHook("on");
         await api(`/task/${activeTaskId}/message`, {
           method: "POST",
-          body: JSON.stringify({ text: task, tabKey }),
+          body: JSON.stringify({ text: task + att, tabKey }),
         });
         turnStartMs = Date.now(); // 续聊新回合起点（操作条据此显示回合耗时）
         sessionStorage.setItem("dshAiTurnStart", String(turnStartMs));
@@ -1640,10 +1748,12 @@ ${assetScripts}
     sessionStorage.setItem("dshAiTurnStart", String(turnStartMs));
     try {
       const { customPrompt, aiLevel, workspace } = await readCfg();
+      const att = await flushAttachments(null);
+      if (att === null) return; // 附件上传失败：预览条保留，不提交
       const d = await api("/task", {
         method: "POST",
         body: JSON.stringify({
-          text: task,
+          text: task + att,
           url: location.href,
           title: document.title,
           pageKey: pageKey(),
