@@ -1603,12 +1603,38 @@ ${assetScripts}
     let wasRunning = null; // chat 模式运行态变化检测（避免每轮重复切 hook）
     let procCollapsed = false; // 本回合过程步骤是否已折叠（终态折一次，新回合重置）
     let idleMs = 800; // chat 空闲轮询间隔（无动静翻倍退避至 4s，有动静恢复 800ms）
+    let netDownSince = 0; // 网络断连起点（0=连接正常）：瞬时抖动静默重试，不再一断就红字报错吓用户
     try {
       while (true) {
         if (myGen !== pollGen) return;
-        const d = await api(
-          `/task/${taskId}/poll?after=${after}&tab=${encodeURIComponent(tabKey)}`,
-        );
+        let d;
+        try {
+          d = await api(
+            `/task/${taskId}/poll?after=${after}&tab=${encodeURIComponent(tabKey)}`,
+          );
+        } catch (e) {
+          if (!/fetch|network|failed/i.test(String(e?.message ?? e))) throw e; // 非网络错误照旧上抛
+          if (!netDownSince) {
+            netDownSince = Date.now();
+            setStatus("与本地助手连接中断，重连中…");
+          }
+          if (Date.now() - netDownSince > 60000) {
+            // 超过 1 分钟仍连不上才降级：文案平静可操作，不再显示英文 NetworkError
+            resetTask();
+            addStep(
+              "与本地助手（relay）断开超过 1 分钟，已停止监听。请确认 DSH web 服务正在运行，之后可在「历史会话」中切回本会话继续。",
+              true,
+            );
+            setStatus("本地助手连接断开");
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          continue;
+        }
+        if (netDownSince) {
+          netDownSince = 0; // 重连成功：恢复状态栏（任务绑定未清，无缝续接）
+          setStatus(d.statusText || "对话中（可继续输入）");
+        }
         for (const ev of d.events ?? []) {
           if (ev.user)
             addUserBubble(ev.text); // 用户消息统一由 relay 事件回显（本地发送不重复画）
