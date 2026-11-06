@@ -1347,6 +1347,16 @@ ${assetScripts}
     }
     hideQuestion();
   }
+  // 会话未结束也可切换：先自动停掉进行中的回合（等同点停止，pending 命令由 relay 收敛、会话保留可切回续聊）
+  async function stopRunningTurn() {
+    if (activeTaskId && !stopBtn.hidden) {
+      try {
+        await api("/task/cancel", { method: "POST", body: JSON.stringify({ taskId: activeTaskId }) });
+      } catch {
+        /* 停止失败不阻断切换：旧任务若仍 running，relay 守卫会兜底提示 */
+      }
+    }
+  }
   function finishTask(d) {
     const tid = activeTaskId; // resetTask 会清零，先留作反馈归属
     resetTask();
@@ -1514,10 +1524,7 @@ ${assetScripts}
   }
   // 切换到历史会话：拉取历史回放（relay 会按 sessionId 重挂被清理的记录），此后与 live 会话无异（可续聊/可操作页面）
   async function loadSession(entry) {
-    if (inputEl.disabled) {
-      setStatus("请等当前回合结束（或先点停止）");
-      return;
-    }
+    await stopRunningTurn(); // 旧回合进行中也放行切换：先自动停掉（会话保留）
     pollGen++; // 停掉当前任务轮询
     resetTask();
     if (coreApi) for (const el of stepsEl.children) coreApi.unmountDshRd(el);
@@ -1579,11 +1586,8 @@ ${assetScripts}
   });
 
   // 「+」开新会话：断开当前任务绑定（终止轮询），下一条输入新建任务会话；旧会话仍可在 DSH web UI 回看
-  function newChat() {
-    if (inputEl.disabled) {
-      setStatus("请等当前回合结束（或先点停止）");
-      return;
-    }
+  async function newChat() {
+    await stopRunningTurn(); // 旧回合进行中也放行：先自动停掉（会话保留）
     pollGen++; // 旧轮询循环检测到代际变化自行退出
     resetTask();
     clearAttach(); // 清掉未发送的粘贴附件（blob 预览一并释放）
@@ -1713,8 +1717,8 @@ ${assetScripts}
       }
     }
     if (activeTaskId && !chatMode) {
-      setStatus("已有进行中的任务，请先停止或等它结束");
-      return;
+      // 旧任务回合未结束也可直接发起新任务：先自动停掉旧回合（会话保留），后续走新任务分支
+      await stopRunningTurn();
     }
     if (chatMode && activeTaskId) {
       // 会话续聊：同一会话提交新回合（可追问、可继续操作页面）
