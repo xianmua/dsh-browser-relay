@@ -1006,12 +1006,12 @@ ${assetScripts}
     }
     return null;
   }
-  // 下拉点选同样过删除确认（行操作菜单「删除」项可经 browser_select 触达）；返回拒绝结果或 null
+  // 下拉点选同样过高危确认（行操作菜单「删除」项可经 browser_select 触达）；返回拒绝结果或 null
   async function confirmOptionClick(el) {
-    if (el && isDeleteClick(el) && !(await askDeleteConfirm(el)))
+    if (el && isDangerClick(el) && !(await askDangerConfirm(el)))
       return {
         ok: false,
-        message: "用户拒绝了该删除操作，禁止重试；如确需删除请先向用户说明理由",
+        message: "用户拒绝了该高危操作，禁止重试；如确需执行请先向用户说明理由",
       };
     return null;
   }
@@ -1101,24 +1101,25 @@ ${assetScripts}
     return "";
   }
 
-  // 删除类点击二次确认：命中删除语义的元素先在面板弹确认卡，用户点「确认删除」才执行
-  const DELETE_RE = /删除|移除|清空|销毁|delete|remove/i;
-  function isDeleteClick(el) {
+  // 高危操作点击二次确认：命中删除/支付/发送/提交等不可逆语义的元素先在面板弹确认卡，用户点「确认执行」才放行
+  const DANGER_RE =
+    /删除|移除|清空|销毁|作废|注销|撤销|卸载|格式化|支付|付款|转账|汇款|退款|结算|提交订单|确认收货|提交|发送|发布|递交|delete|remove|destroy|purge|pay|payment|checkout|transfer|refund|submit|send|publish/i;
+  function isDangerClick(el) {
     if (!el) return false;
     const attrs = ["title", "aria-label", "class", "data-action"]
       .map((a) => el.getAttribute(a) || "")
       .join(" ");
-    return DELETE_RE.test(`${el.textContent || ""} ${attrs}`);
+    return DANGER_RE.test(`${el.textContent || ""} ${attrs}`);
   }
-  function askDeleteConfirm(el) {
+  function askDangerConfirm(el) {
     return new Promise((resolve) => {
       const label = (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 50) || "(无文本)";
       const tip = document.createElement("div");
       tip.className = "ct";
-      tip.textContent = `即将点击删除类操作「${label}」，确认执行？`;
+      tip.textContent = `即将执行高危操作「${label}」（删除/支付/发送类，可能不可逆），确认执行？`;
       const ok = document.createElement("button");
       ok.className = "qsub";
-      ok.textContent = "确认删除";
+      ok.textContent = "确认执行";
       const no = document.createElement("button");
       no.className = "qopt";
       no.textContent = "取消";
@@ -1134,7 +1135,7 @@ ${assetScripts}
       cboxEl.replaceChildren(tip, ok, no);
       cboxEl.hidden = false;
       cboxEl.scrollIntoView({ block: "nearest" });
-      setStatus("等待删除确认");
+      setStatus("等待高危操作确认");
       tick = setInterval(() => cancelRequested && done(false), 500); // 手动停止视为取消
     });
   }
@@ -1262,7 +1263,7 @@ ${assetScripts}
           ? "已关闭"
           : d.type === "confirm"
             ? d.cancelled
-              ? "已自动取消（删除护栏不放行）"
+              ? "已自动取消（高危操作护栏不放行）"
               : "已自动确认"
             : "已填默认值提交";
       return `${d.type}「${String(d.text).slice(0, 120)}」→ ${ans}`;
