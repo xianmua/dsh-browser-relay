@@ -2,6 +2,10 @@
 
 各版本变更摘要（新版本在上）。安装与使用说明见 [README.md](README.md)。
 
+## 版本 0.7.33 变更摘要（待发布）
+
+- 修复审批卡作答后不消失：approval/request 接管器收敛（done）时未撤 task.approval，面板下一拍 poll 又把卡片画回来；现在收敛统一走 withdraw（撤卡 + 唤醒 poll）
+
 ## 版本 0.7.32 变更摘要（待发布）
 
 - 面板审批卡：接管 DSH 权限审批（approval/request 瀑布，prepend 抢在 web UI 之前）——越权请求（如工作区外写文件、danger-full-access 升级）直接在面板弹橙色审批卡，拒绝/允许一次当场作答，不再要求跳去 DSH web UI；非面板会话放行官方审批，面板 120 秒未答也自动放行官方兜底；审批决定以用户气泡回显，刷新/切换会话后卡片可恢复
