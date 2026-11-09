@@ -100,7 +100,7 @@ export function mountPanel(init = {}) {
         from { opacity: 0; transform: translateX(100%); }
         to { opacity: 1; transform: none; }
       }
-      .qbox, .cbox, .setbox { animation: rise .22s ease-out; }
+      .qbox, .cbox { animation: rise .22s ease-out; }
       .header {
         display: flex; align-items: center; justify-content: space-between;
         padding: 12px 16px; background: #fafafa; border-bottom: 1px solid #f0f0f0; user-select: none;
@@ -278,7 +278,8 @@ export function mountPanel(init = {}) {
         border: none; border-radius: 6px; background: #1a1a1a; color: #fff;
       }
       .qbox .qsub:disabled { background: #bbb; cursor: not-allowed; }
-      .setbox { border-top: 1px solid #f0f0f0; border-bottom: 1px solid #f0f0f0; padding: 8px 16px 10px; font-size: 13px; }
+      /* 设置抽屉：复用 .sessbox 抽屉壳（全高右侧滑入），仅覆盖表单区留白 */
+      .setbox .slist { padding: 10px 16px; font-size: 13px; }
       .setbox label { display: block; color: #999; font-size: 12px; margin: 6px 0 2px; }
       .setbox input, .setbox select, .setbox textarea { width: 100%; box-sizing: border-box; padding: 5px 8px; font-size: 13px; border: 1px solid #ddd; border-radius: 6px; font-family: inherit; background: #fff; color: #1a1a1a; color-scheme: light; }
       .setbox textarea { resize: vertical; min-height: 56px; }
@@ -313,7 +314,10 @@ export function mountPanel(init = {}) {
       <div class="steps"></div>
       <div class="qbox" hidden></div>
       <div class="cbox" hidden></div>
-      <div class="setbox" hidden></div>
+      <div class="setbox sessbox">
+        <div class="shead"><button class="sback" title="返回">‹</button><span>设置</span></div>
+        <div class="slist"></div>
+      </div>
       <div class="menu" hidden></div>
       <div class="sessbox">
         <div class="shead"><button class="sback" title="返回">‹</button><span>历史会话</span></div>
@@ -1494,6 +1498,7 @@ ${assetScripts}
   }
   function toggleSessions() {
     if (sessboxEl.classList.contains("show")) return hideSessions();
+    setboxEl.classList.remove("show"); // 与设置抽屉互斥（同一停靠位）
     sessListEl.replaceChildren();
     const list = loadSessionList();
     if (!list.length) {
@@ -1561,30 +1566,32 @@ ${assetScripts}
   $(".sessions").addEventListener("click", toggleSessions);
   sessboxEl.querySelector(".sback").addEventListener("click", hideSessions);
 
-  // 会话抽屉吸顶位置上下拖动：按住标题栏改 top（0 ~ 视口高-60），位置记忆
+  // 抽屉吸顶位置上下拖动（会话/设置共用同一停靠位与记忆）：按住标题栏改 top（0 ~ 视口高-60）
   const SESS_TOP_KEY = "dshAiSessTop";
   const sessTopClamp = (t) => Math.min(Math.max(t, 0), window.innerHeight - 60); // 就地 clamp（clamp 定义在后方，此处引用会 TDZ）
+  const drawers = [sessboxEl, setboxEl];
   try {
     const t = parseFloat(localStorage.getItem(SESS_TOP_KEY)); // null→NaN，恰好跳过无记忆场景
-    if (Number.isFinite(t)) sessboxEl.style.top = sessTopClamp(t) + "px";
+    if (Number.isFinite(t)) drawers.forEach((box) => (box.style.top = sessTopClamp(t) + "px"));
   } catch {}
-  sessboxEl.querySelector(".shead").addEventListener("mousedown", (e) => {
-    if (e.button !== 0 || e.target.closest(".sback")) return;
-    e.preventDefault();
-    const y0 = e.clientY;
-    const t0 = sessboxEl.getBoundingClientRect().top;
-    const onMove = (ev) =>
-      (sessboxEl.style.top = sessTopClamp(Math.round(t0 + ev.clientY - y0)) + "px");
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove, true);
-      window.removeEventListener("mouseup", onUp, true);
-      try {
-        localStorage.setItem(SESS_TOP_KEY, String(Math.round(parseFloat(sessboxEl.style.top))));
-      } catch {}
-    };
-    window.addEventListener("mousemove", onMove, true);
-    window.addEventListener("mouseup", onUp, true);
-  });
+  for (const box of drawers)
+    box.querySelector(".shead").addEventListener("mousedown", (e) => {
+      if (e.button !== 0 || e.target.closest(".sback")) return;
+      e.preventDefault();
+      const y0 = e.clientY;
+      const t0 = box.getBoundingClientRect().top;
+      const onMove = (ev) =>
+        (box.style.top = sessTopClamp(Math.round(t0 + ev.clientY - y0)) + "px");
+      const onUp = () => {
+        window.removeEventListener("mousemove", onMove, true);
+        window.removeEventListener("mouseup", onUp, true);
+        try {
+          localStorage.setItem(SESS_TOP_KEY, String(Math.round(parseFloat(box.style.top))));
+        } catch {}
+      };
+      window.addEventListener("mousemove", onMove, true);
+      window.addEventListener("mouseup", onUp, true);
+    });
 
   // 「+」开新会话：断开当前任务绑定（终止轮询），下一条输入新建任务会话；旧会话仍可在 DSH web UI 回看
   async function newChat() {
@@ -1916,17 +1923,18 @@ ${assetScripts}
       chrome.runtime.sendMessage({ type: "open-options" });
       return;
     }
-    if (!setboxEl.hidden) {
-      setboxEl.hidden = true;
+    if (setboxEl.classList.contains("show")) {
+      setboxEl.classList.remove("show"); // 抽屉开合同会话列表：加/去 show
       return;
     }
+    sessboxEl.classList.remove("show"); // 与会话抽屉互斥（同一停靠位）
     const cfg = await readCfg();
     const esc = (s) =>
       String(s ?? "")
         .replace(/&/g, "&amp;")
         .replace(/"/g, "&quot;")
         .replace(/</g, "&lt;");
-    setboxEl.innerHTML = `
+    setboxEl.querySelector(".slist").innerHTML = `
       <label>Relay 地址</label><input class="s-url" value="${esc(cfg.baseURL)}">
       <label>Relay Token</label><input class="s-token" value="${esc(cfg.apiKey)}">
       <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区">
@@ -1941,7 +1949,8 @@ ${assetScripts}
       }</div>`;
     setboxEl.querySelector(".s-scope").value = cfg.aiLevel;
     setboxEl.querySelector(".s-fx").value = cfg.showFx === true ? "1" : "";
-    setboxEl.hidden = false;
+    setboxEl.style.width = panel.getBoundingClientRect().width + "px"; // 宽度对齐面板（同会话抽屉）
+    setboxEl.classList.add("show"); // 右侧抽屉滑入
     // 保存即写配置覆盖（扩展=chrome.storage / 页面=localStorage，readCfg 每次请求现读，下个任务即生效）；留空 = 移除该项覆盖
     setboxEl.querySelector(".save").addEventListener("click", async () => {
       const v = (sel) => setboxEl.querySelector(sel).value.trim();
@@ -1953,16 +1962,17 @@ ${assetScripts}
         customPrompt: v(".s-prompt"),
         showFx: setboxEl.querySelector(".s-fx").value === "1",
       });
-      setboxEl.hidden = true;
+      setboxEl.classList.remove("show");
       setStatus("已保存");
     });
     // 清除全部本机覆盖，回落 zip 注入值 / mountPanel(init) / 默认值
     setboxEl.querySelector(".clear").addEventListener("click", async () => {
       await cfgClear();
-      setboxEl.hidden = true;
+      setboxEl.classList.remove("show");
       setStatus("已清除");
     });
   });
+  setboxEl.querySelector(".sback").addEventListener("click", () => setboxEl.classList.remove("show"));
   function autoGrow() {
     inputEl.style.height = "auto";
     inputEl.style.height = `${Math.min(inputEl.scrollHeight, 120)}px`;
