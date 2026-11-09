@@ -2,6 +2,10 @@
 
 各版本变更摘要（新版本在上）。安装与使用说明见 [README.md](README.md)。
 
+## 版本 0.7.34 变更摘要（待发布）
+
+- 修复「DSH 已停 relay 还在转」：新增 turn/end 兜底收敛——扫描器发现会话日志流尾就是 turn/end 而任务仍 running 时（whenIdle 链路偶发丢失），强制收敛到会话态并唤醒长轮询，面板秒级恢复输入；尾事件是 turn/start（自动复核新回合）不误收敛
+
 ## 版本 0.7.33 变更摘要（待发布）
 
 - 修复审批卡作答后不消失：approval/request 接管器收敛（done）时未撤 task.approval，面板下一拍 poll 又把卡片画回来；现在收敛统一走 withdraw（撤卡 + 唤醒 poll）
