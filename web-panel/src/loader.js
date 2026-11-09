@@ -191,6 +191,10 @@ export function mountPanel(init = {}) {
         border-radius: 12px 12px 4px 12px; padding: 6px 11px;
         margin: 4px 0 4px auto; max-width: 85%; width: fit-content;
       }
+      /* 用户气泡内附件图形化：图片缩略图（点击看原图）+ 文件 chip，替代裸路径文本 */
+      .step.me .att-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+      .step.me .att-row img { max-width: 130px; max-height: 92px; border-radius: 6px; cursor: zoom-in; display: block; }
+      .step.me .att-row .fchip { font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.14); }
       .step.err {
         color: #c5221f; background: #fdf0ef; border-radius: 6px;
         padding: 4px 8px; margin: 2px 0; border-bottom: none;
@@ -530,10 +534,39 @@ ${assetScripts}
     return f;
   }
   function addUserBubble(text) {
-    // 用户输入：右侧深色气泡（轻量混排，其余事件仍是日志行）
+    // 用户输入：右侧深色气泡（轻量混排，其余事件仍是日志行）；附件路径块不原样回显，图形化为缩略图/文件 chip
     const el = document.createElement("div");
     el.className = "step me";
-    el.textContent = text;
+    const attBlock = text.match(/\n?\[附件已保存[^\]]*\]\n((?:- .+(?:\n|$))+)/);
+    if (!attBlock) {
+      el.textContent = text;
+    } else {
+      el.textContent = text.slice(0, attBlock.index).trim() || "（附件）";
+      const row = document.createElement("div");
+      row.className = "att-row";
+      for (const line of attBlock[1].trim().split("\n")) {
+        const mm = line.match(/^- (?:图片|文件)（(.+?)）：(.+)$/);
+        if (!mm) continue;
+        const [, name, p] = mm;
+        const rel = `dsh-relay-uploads/${String(p).split(/[\\/]/).pop()}`; // 上传端点固定目录，从任意路径形态还原相对路径
+        if (/\.(png|jpe?g|gif|webp|svg|bmp|ico|avif)$/i.test(rel)) {
+          const img = document.createElement("img");
+          img.alt = name;
+          img.title = `${name}（点击查看原图）`;
+          img.addEventListener("click", () => window.open(img.src, "_blank"));
+          row.appendChild(img);
+          readCfg().then((cfg) => {
+            img.src = `${String(cfg.baseURL ?? "").replace(/\/+$/, "")}/file?taskId=${activeTaskId}&p=${encodeURIComponent(rel)}&token=${encodeURIComponent(cfg.apiKey ?? "")}`;
+          });
+        } else {
+          const chip = document.createElement("span");
+          chip.className = "fchip";
+          chip.textContent = `📄 ${name}`;
+          row.appendChild(chip);
+        }
+      }
+      el.appendChild(row);
+    }
     stepsEl.appendChild(el);
     stepsEl.scrollTop = stepsEl.scrollHeight;
   }
