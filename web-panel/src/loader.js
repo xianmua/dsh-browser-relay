@@ -419,7 +419,7 @@ export function mountPanel(init = {}) {
     });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(d?.error?.message || `HTTP ${r.status}`);
-    return String(d.path ?? "");
+    return { path: String(d.path ?? ""), abs: String(d.abs ?? "") };
   }
   // 发送前上传全部附件，返回拼进任务文本的路径引用块；全部成功才清预览条（失败保留可重试）
   async function flushAttachments(taskId) {
@@ -427,15 +427,22 @@ export function mountPanel(init = {}) {
     const lines = [];
     try {
       for (const a of attach) {
-        const rel = await uploadFile(a.file, taskId);
-        lines.push(`- ${a.img ? "图片" : "文件"}（${a.name}）：${rel}`);
+        const r = await uploadFile(a.file, taskId);
+        lines.push(`- ${a.img ? "图片" : "文件"}（${a.name}）：${r.abs || r.path}`);
       }
     } catch (e) {
-      setStatus(`附件上传失败：${e.message}`);
+      const msg = String(e?.message ?? e);
+      // 失败要显眼：红色错误行（只写状态栏用户注意不到，会以为"发了没反应"）
+      addStep(
+        `附件上传失败：${msg}${
+          /404|未知接口/.test(msg) ? "（本地 relay 版本过旧，重启 DSH web 服务后重试）" : ""
+        }。附件已保留，可直接重发`,
+        true,
+      );
       return null;
     }
     clearAttach();
-    return `\n\n[附件已保存到工作区，以下路径相对工作区根目录，请用文件读取工具逐个查看后结合内容处理任务]\n${lines.join("\n")}`;
+    return `\n\n[附件已保存，请用文件读取工具按以下路径逐个查看后结合内容处理任务]\n${lines.join("\n")}`;
   }
 
   function setStatus(text) {
@@ -1900,17 +1907,16 @@ ${assetScripts}
     const taskId = activeTaskId;
     cancelRequested = true; // 立即生效：中断 batch 每步循环、跳过后续命令
     setStatus("正在停止…");
+    // 兜底先行：无论 /task/cancel 是否及时返回，3s 内强制恢复输入态（正常时 poll 会更快带回）
+    setTimeout(() => {
+      if (activeTaskId === taskId && !stopBtn.hidden) {
+        setRunning(false);
+        clearHighlights(); // 兜底：poll 迟迟带不回空闲态时也把索引标注清掉
+        setStatus(chatMode ? "已停止（会话保持）" : "已停止");
+      }
+    }, 3000);
     try {
       await api("/task/cancel", { method: "POST", body: JSON.stringify({ taskId }) });
-      setStatus("已请求停止…");
-      // 兜底：relay 已确认停止，正常 1s 内 poll 会带回空闲态；超时未恢复则强制恢复输入
-      setTimeout(() => {
-        if (activeTaskId === taskId && !stopBtn.hidden) {
-          setRunning(false);
-          clearHighlights(); // 兜底：poll 迟迟带不回空闲态时也把索引标注清掉
-          setStatus(chatMode ? "已停止（会话保持）" : "已停止");
-        }
-      }, 3000);
     } catch (e) {
       setStatus(`停止失败：${e.message}`);
     }
