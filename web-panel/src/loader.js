@@ -1392,6 +1392,7 @@ ${assetScripts}
       /* 清理失败不影响任务收尾 */
     }
     hideQuestion();
+    hideApproval();
   }
   // 会话未结束也可切换：先自动停掉进行中的回合（等同点停止，pending 命令由 relay 收敛、会话保留可切回续聊）
   async function stopRunningTurn() {
@@ -1710,8 +1711,10 @@ ${assetScripts}
           });
           continue;
         }
+        if (d.approval) showApproval(d.approval);
+        else hideApproval();
         if (d.question) showQuestion(d.question);
-        else if (!qboxEl.hidden) hideQuestion();
+        else if (!qboxEl.hidden && qboxEl.dataset.ap !== "1") hideQuestion();
         if (d.chat) {
           // 会话模式：常驻不终态；回合中禁输入显示停止，空闲恢复输入并放慢轮询（relay 对 chat 空闲立即返回）
           chatMode = true;
@@ -1732,9 +1735,9 @@ ${assetScripts}
           }
           // 会话模式回合结束不走 finishTask/resetTask（任务常驻），空闲期每次 poll 清索引标注（防切换拍漏清）
           if (!r) clearHighlights();
-          // 空闲退避：运行中/有新事件/命令/提问 → 保持 800ms 快轮询；持续空闲 → 800ms 翻倍至 4s 封顶，省空闲期代理流量
+          // 空闲退避：运行中/有新事件/命令/提问/审批 → 保持 800ms 快轮询；持续空闲 → 800ms 翻倍至 4s 封顶，省空闲期代理流量
           idleMs =
-            r || (d.events?.length ?? 0) > 0 || d.command || d.question
+            r || (d.events?.length ?? 0) > 0 || d.command || d.question || d.approval
               ? 800
               : Math.min(idleMs * 2, 4000);
           if (!r) await new Promise((resolve) => setTimeout(resolve, idleMs));
@@ -1862,6 +1865,7 @@ ${assetScripts}
     qCallId = "";
     qboxEl.hidden = true;
     qboxEl.replaceChildren();
+    delete qboxEl.dataset.ap; // 清审批标记，防后续 hideApproval 误伤提问卡
   }
   function showQuestion(q) {
     if (qCallId === q.callId) return; // 同一问题已渲染（poll 幂等）
@@ -1933,6 +1937,61 @@ ${assetScripts}
         for (const label of item.options) btns[bi++]?.classList.toggle("on", picks[i].has(label));
       });
     }
+  }
+
+  // ---------- DSH 权限审批卡：越权请求（如写工作区外文件）原本只在 DSH web UI 弹，这里面板内直接批 ----------
+  let approvalKey = "";
+  function hideApproval() {
+    approvalKey = "";
+    if (qboxEl.dataset.ap === "1") {
+      qboxEl.hidden = true;
+      qboxEl.replaceChildren();
+      delete qboxEl.dataset.ap;
+    }
+  }
+  function showApproval(a) {
+    const key = `${a.toolName}|${a.reason}`;
+    if (approvalKey === key && qboxEl.dataset.ap === "1") return; // 同一审批已渲染（poll 幂等）
+    approvalKey = key;
+    hideQuestion(); // 审批与提问互斥（agent 阻塞在审批上不可能同时提问）
+    qboxEl.dataset.ap = "1";
+    qboxEl.replaceChildren();
+    const el = (tag, cls, text) => {
+      const n = document.createElement(tag);
+      n.className = cls;
+      if (text) n.textContent = text;
+      qboxEl.append(n);
+      return n;
+    };
+    el("div", "qh", "等待审批（可能越权，请确认）");
+    el("div", "qt", a.reason || `工具 ${a.toolName} 请求越权执行`);
+    const row = el("div", "");
+    row.style.cssText = "display:flex;gap:8px;margin-top:2px";
+    const reject = document.createElement("button");
+    reject.className = "qopt";
+    reject.textContent = "拒绝";
+    const allow = document.createElement("button");
+    allow.className = "qopt";
+    allow.textContent = "允许一次";
+    allow.style.cssText = "background:#1a1a1a;color:#fff;border-color:#1a1a1a";
+    row.append(reject, allow);
+    const answer = async (outcome) => {
+      reject.disabled = allow.disabled = true;
+      try {
+        await api(`/task/${activeTaskId}/approval`, {
+          method: "POST",
+          body: JSON.stringify({ outcome }),
+        });
+        // 决定气泡由 relay approvalRoute 以 user 事件下发，本地不重复画
+        hideApproval();
+      } catch (e) {
+        setStatus(`审批提交失败：${e.message}`);
+        reject.disabled = allow.disabled = false;
+      }
+    };
+    reject.addEventListener("click", () => answer("rejected"));
+    allow.addEventListener("click", () => answer("allowed-once"));
+    qboxEl.hidden = false;
   }
 
   async function stop() {
