@@ -1705,6 +1705,10 @@ ${assetScripts}
           if (ev.user)
             addUserBubble(ev.text); // 用户消息统一由 relay 事件回显（本地发送不重复画）
           else addStep(ev.text, false, ev.md);
+          if (ev.md && !procCollapsed) {
+            procCollapsed = true; // 结果一落地就折叠其上的过程步骤，突出最终回复，不等终态
+            collapseProcess();
+          }
           after = Math.max(after, ev.seq);
         }
         if (d.statusText) {
