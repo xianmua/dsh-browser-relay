@@ -467,8 +467,24 @@ export function mountPanel(init = {}) {
       node.setAttribute("rel", "noopener");
     }
   });
+  // 裸 URL 自动链接保护：先把未包链的裸 URL 包成 <...> 再交给 marked，
+  // 防止 URL 里的 * _ 等字符被当 markdown 强调语法解析坏（复制出的链接变形失效）。
+  // 跳过代码段（围栏/行内，split 捕获组奇数位）与已有 markdown 链接 ](...) 里的 URL
+  function autolinkBareUrls(src) {
+    return String(src)
+      .split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/g)
+      .map((seg, i) =>
+        i % 2
+          ? seg
+          : seg.replace(
+              /(?<![\w"'=<(])https?:\/\/[^\s<>()\[\]{}"'「」『』《》〈〉（）【】。，；：！？、…—·]+(?<![.,;:!?'"。，；：！？、…])/g,
+              (u) => `<${u}>`,
+            ),
+      )
+      .join("");
+  }
   function renderMd(src) {
-    return DOMPurify.sanitize(marked.parse(String(src), { breaks: true, gfm: true }), {
+    return DOMPurify.sanitize(marked.parse(autolinkBareUrls(String(src)), { breaks: true, gfm: true }), {
       ADD_ATTR: ["target"],
     });
   }
