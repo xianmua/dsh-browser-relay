@@ -900,11 +900,13 @@ ${assetScripts}
     cfg.baseURL = o.baseURL || cfg.baseURL;
     cfg.apiKey = o.token || cfg.apiKey;
     cfg.customPrompt = o.customPrompt || cfg.customPrompt;
-    // 旧档位名迁移：read/browser/browserFx→page；页面版封顶 L4（all→dsh）
+    // 旧档位名迁移：read/browser/browserFx→page；页面版封顶 L4 且档位名必须合法（all/L5 等非法值→dsh）
     cfg.aiLevel =
       { read: "page", browser: "page", browserFx: "page" }[o.aiLevel] || o.aiLevel || cfg.aiLevel;
-    if (!isExt && cfg.aiLevel === "all") cfg.aiLevel = "dsh";
-    cfg.showFx = o.showFx === true || cfg.showFx === true;
+    if (!isExt && (cfg.aiLevel === "all" || !["none", "page", "site", "dsh"].includes(cfg.aiLevel)))
+      cfg.aiLevel = "dsh";
+    // 会话级显式设置优先；未设置（空）回落页面全局
+    cfg.showFx = sessFx !== "" ? sessFx === "1" : o.showFx === true || cfg.showFx === true;
     cfg.workspace = o.workspace || cfg.workspace;
     return cfg;
   }
@@ -1388,6 +1390,7 @@ ${assetScripts}
 
   // ---------- 任务轮询与提交 ----------
   let activeTaskId = 0;
+  let activeSessionId = "";
   let cancelRequested = false; // 本地停止标志：中断 batch 循环、跳过后续命令执行
   // 当前回合起点（面板提交 → 回合结束），操作条据此显示回合耗时；sessionStorage 持久化刷新后仍可算
   let turnStartMs = Number(sessionStorage.getItem("dshAiTurnStart")) || 0;
@@ -1541,8 +1544,21 @@ ${assetScripts}
     showMenu(items);
   }
   // ---------- 历史会话列表：面板发起过的会话存 localStorage，点开切换并回放历史 ----------
-  const SESS_KEY = "dshAiSessions"; // [{sessionId, taskId, title, ts}]，taskId 可能因 relay 重启重挂后变化
+  const SESS_KEY = "dshAiSessions"; // [{sessionId, taskId, title, prompt, fx, ts}]，taskId 可能因 relay 重启重挂后变化
   const SESS_CAP = 30;
+  let sessPrompt = sessionStorage.getItem("dshAiSessPrompt") || ""; // 会话级 prompt：随会话保存切换，新会话清空；提交时拼接在页面全局 prompt 后
+  let sessFx = sessionStorage.getItem("dshAiSessFx") ?? ""; // 会话级特效："1"/""（空=回落页面全局配置）
+  function setSessField(key, storeKey, v) {
+    v = String(v ?? "");
+    sessionStorage.setItem(storeKey, v);
+    if (activeSessionId) {
+      const entry = loadSessionList().find((s) => s.sessionId === activeSessionId);
+      if (entry) saveSessionEntry({ ...entry, [key]: v }); // 回写会话条目，切换/回放后仍在
+    }
+    return v;
+  }
+  const setSessPrompt = (v) => (sessPrompt = setSessField("prompt", "dshAiSessPrompt", v));
+  const setSessFx = (v) => (sessFx = setSessField("fx", "dshAiSessFx", v));
   function loadSessionList() {
     try {
       const list = JSON.parse(localStorage.getItem(SESS_KEY));
@@ -1552,6 +1568,9 @@ ${assetScripts}
     }
   }
   function saveSessionEntry(entry) {
+    const prev = loadSessionList().find((s) => s.sessionId === entry.sessionId);
+    if (prev && entry.prompt === undefined) entry.prompt = prev.prompt; // 未显式给 prompt 时保留旧值（切换回放路径）
+    if (prev && entry.fx === undefined) entry.fx = prev.fx; // 同上，特效会话级值
     const list = loadSessionList().filter((s) => s.sessionId !== entry.sessionId);
     list.unshift(entry);
     localStorage.setItem(SESS_KEY, JSON.stringify(list.slice(0, SESS_CAP)));
@@ -1612,6 +1631,9 @@ ${assetScripts}
       entry.taskId = d.taskId; // relay 重启后重挂，taskId 可能变化，回写列表
       saveSessionEntry(entry);
       activeTaskId = d.taskId;
+      activeSessionId = entry.sessionId;
+      setSessPrompt(entry.prompt || ""); // 会话级 prompt 随会话切换
+      setSessFx(entry.fx ?? ""); // 特效随会话切换
       sessionStorage.setItem("dshAiTask", String(d.taskId));
       chatMode = true; // 历史会话一律会话模式：可继续输入
       for (const ev of d.events ?? []) {
@@ -1667,6 +1689,9 @@ ${assetScripts}
     pollGen++; // 旧轮询循环检测到代际变化自行退出
     resetTask();
     clearAttach(); // 清掉未发送的粘贴附件（blob 预览一并释放）
+    activeSessionId = ""; // 新会话：会话级配置一并回落全局
+    setSessPrompt("");
+    setSessFx("");
     if (coreApi) for (const el of stepsEl.children) coreApi.unmountDshRd(el); // 卸载 DSH 渲染的 React root
     stepsEl.replaceChildren();
     setStatus("空闲（输入即新任务）");
@@ -1869,15 +1894,16 @@ ${assetScripts}
           url: location.href,
           title: document.title,
           pageKey: pageKey(),
-          customPrompt: customPrompt || "",
+          customPrompt: [customPrompt, sessPrompt].filter(Boolean).join("\n"), // 页面全局 + 会话级 拼接下发
           aiLevel: aiLevel || "dsh",
           workspace: workspace || "",
           tabKey,
         }),
       });
       activeTaskId = d.taskId;
+      activeSessionId = d.sessionId;
       sessionStorage.setItem("dshAiTask", String(d.taskId));
-      saveSessionEntry({ sessionId: d.sessionId, taskId: d.taskId, title: task.slice(0, 200), ts: Date.now() }); // 存 200 字符，列表行只显示前 10、悬停提示全文
+      saveSessionEntry({ sessionId: d.sessionId, taskId: d.taskId, title: task.slice(0, 200), prompt: sessPrompt, fx: sessFx, ts: Date.now() }); // 存 200 字符，列表行只显示前 10、悬停提示全文
       cancelRequested = false;
       setRunning(true);
       setDialogHook("on");
@@ -2064,32 +2090,46 @@ ${assetScripts}
         .replace(/"/g, "&quot;")
         .replace(/</g, "&lt;");
     setboxEl.querySelector(".slist").innerHTML = `
-      <label>Relay 地址</label><input class="s-url" value="${esc(cfg.baseURL)}">
-      <label>Relay Token</label><input class="s-token" value="${esc(cfg.apiKey)}">
-      <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区">
+      <label>Relay 地址</label><input class="s-url" value="${esc(cfg.baseURL)}"${isExt ? "" : " disabled"}>
+      <label>Relay Token</label><input class="s-token" value="${esc(cfg.apiKey)}"${isExt ? "" : " disabled"}>
+      <label>工作区（DSH 会话按此目录归组，留空不分组）</label><input class="s-ws" value="${esc(cfg.workspace)}" placeholder="/绝对路径/到/工作区"${isExt ? "" : " disabled"}>
       <label>智能等级</label>
-      <select class="s-scope"><option value="none">L1：仅问答（不触碰页面）</option><option value="page">L2：本页面读写（禁导航）</option><option value="site">L3：站内浏览（同域含子域可导航）</option><option value="dsh">L4：页面+DSH 工具（默认）</option>${isExt ? '<option value="all">L5：DSH 全量+浏览器全量</option>' : ""}</select>
-      <label>特效（与智能等级解绑，L1 下不生效）</label>
-      <select class="s-fx"><option value="">关闭（静默执行）</option><option value="1">模拟光标 + 操作特效</option></select>
-      <label>自定义 prompt（随任务发给 agent）</label><textarea class="s-prompt" placeholder="对当前业务页的全局要求，如输出格式、固定流程">${esc(cfg.customPrompt)}</textarea>
-      <div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>
+      <select class="s-scope"${isExt ? "" : " disabled"}><option value="none">L1：仅问答（不触碰页面）</option><option value="page">L2：本页面读写（禁导航）</option><option value="site">L3：站内浏览（同域含子域可导航）</option><option value="dsh">L4：页面+DSH 工具（默认）</option>${isExt ? '<option value="all">L5：DSH 全量+浏览器全量</option>' : ""}</select>
+      <label>特效（会话级，随会话保存切换；未设置时回落页面全局）</label>
+      <select class="s-fx"><option value="">未设置（回落全局）</option><option value="1">开（模拟光标 + 操作特效）</option><option value="0">关（静默执行）</option></select>
+      <label>本会话 prompt（随会话保存切换，与页面全局 prompt 拼接后随任务下发）</label><textarea class="s-prompt" placeholder="当前会话的专属要求，如输出格式、固定流程">${esc(sessPrompt)}</textarea>
+      ${
+        isExt
+          ? `<div class="row2"><button class="save">保存</button><button class="clear">清除本机覆盖</button></div>`
+          : `<div class="diag">页面版配置由 script 标签 data-* 固定，修改需更新引入处标签</div>`
+      }
       <div class="diag">面板 v${esc(PANEL_VERSION)} · 渲染核心${
         coreApi ? "已加载（DSH 管线）" : corePromise ? "加载中…" : "未加载（降级 marked 轻量渲染）"
       }</div>`;
-    setboxEl.querySelector(".s-scope").value = cfg.aiLevel;
-    setboxEl.querySelector(".s-fx").value = cfg.showFx === true ? "1" : "";
+    const scopeEl = setboxEl.querySelector(".s-scope");
+    if (scopeEl) scopeEl.value = cfg.aiLevel;
+    const fxEl = setboxEl.querySelector(".s-fx");
+    if (fxEl) fxEl.value = sessFx;
+    // 会话级配置：prompt/特效输入即存（change 失焦触发），随会话保存切换；页面版同样可编辑
+    setboxEl.querySelector(".s-prompt").addEventListener("change", (e) => {
+      setSessPrompt(e.target.value);
+      setStatus("本会话 prompt 已更新");
+    });
+    fxEl.addEventListener("change", (e) => {
+      setSessFx(e.target.value);
+      setStatus(e.target.value === "" ? "特效回落页面全局配置" : "本会话特效已更新");
+    });
     setboxEl.style.width = panel.getBoundingClientRect().width + "px"; // 宽度对齐面板（同会话抽屉）
     setboxEl.classList.add("show"); // 右侧抽屉滑入
-    // 保存即写配置覆盖（扩展=chrome.storage / 页面=localStorage，readCfg 每次请求现读，下个任务即生效）；留空 = 移除该项覆盖
+    if (!isExt) return; // 页面版只读展示，无保存/清除
+    // 保存即写配置覆盖（扩展=chrome.storage，readCfg 每次请求现读，下个任务即生效）；留空 = 移除该项覆盖
     setboxEl.querySelector(".save").addEventListener("click", async () => {
       const v = (sel) => setboxEl.querySelector(sel).value.trim();
       await cfgSave({
         baseURL: v(".s-url"),
         token: v(".s-token"),
         workspace: v(".s-ws"),
-        aiLevel: v(".s-scope"),
-        customPrompt: v(".s-prompt"),
-        showFx: setboxEl.querySelector(".s-fx").value === "1",
+        aiLevel: v(".s-scope"), // 特效已会话级，不进全局覆盖
       });
       setboxEl.classList.remove("show");
       setStatus("已保存");

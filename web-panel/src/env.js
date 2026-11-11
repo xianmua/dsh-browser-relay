@@ -4,7 +4,7 @@
 export const isExt = typeof chrome !== "undefined" && !!chrome.runtime?.id;
 
 // 配置覆盖读取：扩展用 chrome.storage（baseURLOverride/tokenOverride 与 options 设置页共用同一组 key，
-// customPrompt/aiLevel 直接存值）；页面版用 localStorage dshAssistant.*
+// customPrompt/aiLevel 直接存值）；页面版不用本机覆盖——script 标签 data-* 即唯一配置源，改配置改标签
 export async function cfgOverrides() {
   if (isExt) {
     const st = await chrome.storage.local.get({
@@ -24,21 +24,13 @@ export async function cfgOverrides() {
       workspace: st.workspace || "",
     };
   }
-  const ls = (k) => localStorage.getItem(`dshAssistant.${k}`) ?? "";
-  return {
-    baseURL: ls("baseURL"),
-    token: ls("token"),
-    customPrompt: ls("customPrompt"),
-    aiLevel: ls("aiLevel"),
-    showFx: ls("showFx") === "1",
-    workspace: ls("workspace"),
-  };
+  return { baseURL: "", token: "", customPrompt: "", aiLevel: "", showFx: false, workspace: "" };
 }
 
-// 配置覆盖写入（设置弹层保存）：留空值 = 移除覆盖
+// 配置覆盖写入（设置弹层保存）：仅扩展版生效；页面版配置由 script 标签固定，写入是空操作
 export async function cfgSave({ baseURL, token, aiLevel, customPrompt, showFx, workspace }) {
-  if (isExt) {
-    const put = {};
+  if (!isExt) return;
+  const put = {};
     if (baseURL) put.baseURLOverride = baseURL;
     if (token) put.tokenOverride = token;
     if (aiLevel) put.aiLevel = aiLevel;
@@ -46,31 +38,17 @@ export async function cfgSave({ baseURL, token, aiLevel, customPrompt, showFx, w
     put.showFx = showFx === true;
     if (workspace) put.workspace = workspace;
     await chrome.storage.local.set(put);
-    return;
-  }
-  const put = (k, v) =>
-    v ? localStorage.setItem(`dshAssistant.${k}`, v) : localStorage.removeItem(`dshAssistant.${k}`);
-  put("baseURL", baseURL);
-  put("token", token);
-  put("aiLevel", aiLevel);
-  put("customPrompt", customPrompt);
-  put("showFx", showFx === true ? "1" : "");
-  put("workspace", workspace);
 }
 
-// 清除全部配置覆盖，回落 zip 注入值 / mountPanel(init) / 默认值
+// 清除全部配置覆盖，回落 zip 注入值 / mountPanel(init) / 默认值；页面版本无覆盖层，空操作
 export async function cfgClear() {
-  if (isExt) {
-    await chrome.storage.local.remove([
-      "baseURLOverride",
-      "tokenOverride",
-      "customPrompt",
-      "aiLevel",
-      "showFx",
-      "workspace",
-    ]);
-    return;
-  }
-  for (const k of ["baseURL", "token", "aiLevel", "customPrompt", "showFx", "workspace"])
-    localStorage.removeItem(`dshAssistant.${k}`);
+  if (!isExt) return;
+  await chrome.storage.local.remove([
+    "baseURLOverride",
+    "tokenOverride",
+    "customPrompt",
+    "aiLevel",
+    "showFx",
+    "workspace",
+  ]);
 }
