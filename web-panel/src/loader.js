@@ -716,13 +716,30 @@ ${assetScripts}
   // 工作区的路径 → 直接加载必碎。渲染完成后统一改写成 relay /file 端点（按 taskId 定位
   // 工作区返回文件）/img 缓存端点（relay 已改写的 /img?u=… 补 base+token）；失败再兜占位，避免碎图标
   function hookImgFallback(img, src) {
-    img.onerror = () => {
-      img.onerror = null;
+    // /img 缓存端点失败先回退原始 URL（浏览器直拉，带用户登录 cookie，不受服务器出网限制
+    // ——server 部署的 relay 可能拉不通外网/自身公网域名），仍失败才换占位提示
+    const showTip = () => {
       if (!img.isConnected) return;
       const tip = document.createElement("div");
       tip.className = "img-fallback";
       tip.textContent = `⚠ 图片加载失败：${img.getAttribute("alt") || src}`;
       img.replaceWith(tip);
+    };
+    img.onerror = () => {
+      img.onerror = null;
+      if (!img.isConnected) return;
+      if (!img.dataset.origTried && /\/img\?u=/.test(src)) {
+        img.dataset.origTried = "1";
+        try {
+          const u = new URL(src, location.href).searchParams.get("u");
+          if (u && /^https?:/i.test(u)) {
+            img.onerror = showTip;
+            img.src = u; // 回退原始 URL：浏览器直拉
+            return;
+          }
+        } catch {}
+      }
+      showTip();
     };
   }
   async function rewriteLocalImgs(div) {
