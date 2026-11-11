@@ -636,13 +636,17 @@ ${assetScripts}
     replayCollapsed && !isError && !md ? appendProcessRow(div) : stepsEl.appendChild(div);
     if (md) {
       // 首选：DSH 原版渲染核心（按需加载 core 产物）；失败/不可用降级 marked 轻量管线
-      renderMdCore(div, text)
-        .catch((e) => {
-          // 渲染流程自身异常（理论上内部已兜底，此处防漏网之鱼静默丢内容）
-          console.warn("[dsh-assistant] 渲染流程异常，降级 marked：", e);
-          if (div.isConnected && !div.textContent.trim()) renderMdLegacy(div, text);
-        })
-        .finally(() => rewriteLocalImgs(div).catch(() => {}));
+      prewriteMdImages(text)
+        .catch(() => text)
+        .then((t) =>
+          renderMdCore(div, t)
+            .catch((e) => {
+              // 渲染流程自身异常（理论上内部已兜底，此处防漏网之鱼静默丢内容）
+              console.warn("[dsh-assistant] 渲染流程异常，降级 marked：", e);
+              if (div.isConnected && !div.textContent.trim()) renderMdLegacy(div, t, "渲染流程异常");
+            })
+            .finally(() => rewriteLocalImgs(div).catch(() => {})),
+        );
     } else div.textContent = text;
     stepsEl.scrollTop = stepsEl.scrollHeight;
   }
@@ -674,7 +678,7 @@ ${assetScripts}
             children: div.children.length,
             htmlLen: div.innerHTML.length,
           });
-          renderMdLegacy(div, text);
+          renderMdLegacy(div, text, "核心2s未产出");
           appendRenderNote(div, "渲染核心未产出内容，已降级轻量渲染");
         } else {
           // 内容出现过又消失（React 迟到崩溃/卸载）：半秒后复查补绘
@@ -684,7 +688,7 @@ ${assetScripts}
               children: div.children.length,
               htmlLen: div.innerHTML.length,
             });
-            renderMdLegacy(div, text);
+            renderMdLegacy(div, text, "内容事后丢失");
             appendRenderNote(div, "渲染内容丢失，已降级重绘");
           }
         }
@@ -697,7 +701,7 @@ ${assetScripts}
         appendRenderNote(div, `DSH 渲染异常：${String(e?.message ?? e).slice(0, 120)}`);
       }
     }
-    renderMdLegacy(div, text);
+    renderMdLegacy(div, text, core ? "核心渲染异常" : "核心不可用");
     await new Promise((r) => setTimeout(r, 200));
     if (div.isConnected && !div.textContent.trim()) {
       // marked 也产出为空：直接显示原文，内容绝不消失
@@ -741,6 +745,33 @@ ${assetScripts}
       }
       showTip();
     };
+  }
+  // 渲染前 md 文本预处理：把本地图 src 预改写为 relay 绝对地址。DSH 渲染核心只对 http(s)
+  // 绝对地址输出 <img>，相对路径/无协议 src（含 relay 改写的 /img /file）只渲染成 alt 文字
+  // 占位 span——必须在渲染前补全协议，否则面板里图片「根本不展示」。跳过代码段；http(s)
+  // 保持原样；改写后的绝对地址会让渲染后 rewriteLocalImgs 的补 token/兜底逻辑自然跳过改写分支
+  async function prewriteMdImages(text) {
+    if (!/!\[[^\]]*\]\([^()]+\)/.test(String(text))) return text;
+    const cfg = await readCfg();
+    const base = String(cfg.baseURL ?? "").replace(/\/+$/, "");
+    const token = cfg.apiKey ? `&token=${encodeURIComponent(cfg.apiKey)}` : "";
+    const abs = (src) => {
+      if (/^(https?:|data:|blob:)/i.test(src)) return null;
+      if (/^\/img\?/.test(src)) return `${base}${src}${token}`;
+      if (activeTaskId) return `${base}/file?taskId=${activeTaskId}&p=${encodeURIComponent(src)}${token}`;
+      return null;
+    };
+    return String(text)
+      .split(/(```[\s\S]*?(?:```|$)|`[^`\n]*`)/g) // 奇数位为代码段，不处理
+      .map((seg, i) =>
+        i % 2
+          ? seg
+          : seg.replace(/(!\[[^\]]*\]\()([^()\s]+)(\))/g, (m, pre, src, post) => {
+              const a = abs(src);
+              return a ? pre + a + post : m;
+            }),
+      )
+      .join("");
   }
   async function rewriteLocalImgs(div) {
     if (!div.isConnected) return;
@@ -828,8 +859,31 @@ ${assetScripts}
     for (const el of items) body.appendChild(el);
   }
 
+  // 降级统计埋点：legacy 备胎触发次数 + 最近原因（localStorage 持久，诊断面板展示）。
+  // 目的：为「是否彻底移除 marked 备胎」的决策积累真实触发率数据
+  const LEGACY_STAT_KEY = "dsh-assistant-legacy-stat";
+  function readLegacyStat() {
+    try {
+      const s = JSON.parse(localStorage.getItem(LEGACY_STAT_KEY) || "{}");
+      return { count: s.count || 0, lastReason: s.lastReason || "", lastAt: s.lastAt || "" };
+    } catch {
+      return { count: 0, lastReason: "", lastAt: "" };
+    }
+  }
+  function bumpLegacyStat(reason) {
+    try {
+      const s = readLegacyStat();
+      s.count += 1;
+      s.lastReason = String(reason).slice(0, 120);
+      s.lastAt = new Date().toLocaleString();
+      localStorage.setItem(LEGACY_STAT_KEY, JSON.stringify(s));
+    } catch {
+      /* localStorage 不可用（隐私模式等）不影响渲染本身 */
+    }
+  }
   // marked 轻量渲染（DSH 管线失败时的 fallback）
-  function renderMdLegacy(div, text) {
+  function renderMdLegacy(div, text, reason) {
+    bumpLegacyStat(reason || "未知原因");
     try {
       div.innerHTML = renderMd(text);
     } catch (e) {
@@ -2141,7 +2195,13 @@ ${assetScripts}
       }
       <div class="diag">面板 v${esc(PANEL_VERSION)} · 渲染核心${
         coreApi ? "已加载（DSH 管线）" : corePromise ? "加载中…" : "未加载（降级 marked 轻量渲染）"
-      }</div>`;
+      }</div>
+      <div class="diag">备胎渲染统计（评估移除 marked 用）：${(() => {
+        const st = readLegacyStat();
+        return st.count
+          ? `已触发 ${st.count} 次，最近「${esc(st.lastReason)}」@ ${esc(st.lastAt)}`
+          : "从未触发";
+      })()}</div>`;
     const scopeEl = setboxEl.querySelector(".s-scope");
     if (scopeEl) scopeEl.value = cfg.aiLevel;
     const fxEl = setboxEl.querySelector(".s-fx");
