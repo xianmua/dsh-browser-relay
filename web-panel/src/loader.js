@@ -199,6 +199,10 @@ export function mountPanel(init = {}) {
         color: #c5221f; background: #fdf0ef; border-radius: 6px;
         padding: 4px 8px; margin: 2px 0; border-bottom: none;
       }
+      .step.warn {
+        color: #b45309; background: #fdf6ec; border-radius: 6px;
+        padding: 4px 8px; margin: 2px 0; border-bottom: none;
+      }
       .steps .step:last-child { border-bottom: none; }
       details.think { padding: 2px 0; border-bottom: 1px solid #f7f7f7; }
       details.think summary {
@@ -626,7 +630,7 @@ ${assetScripts}
     }
     curThink = null;
     const div = document.createElement("div");
-    div.className = isError ? "step err" : md ? "step md" : "step";
+    div.className = isError === "warn" ? "step warn" : isError ? "step err" : md ? "step md" : "step";
     // 先入列再渲染：async 函数首个 await 前同步执行，若先调 renderMdCore，
     // core 已预加载时会同步跑完 isConnected 检查（此时 div 还没挂进文档，恒为离场）直接跳过渲染
     replayCollapsed && !isError && !md ? appendProcessRow(div) : stepsEl.appendChild(div);
@@ -710,26 +714,41 @@ ${assetScripts}
   }
   // 本地相对路径图片兜底：img 相对 src 是相对网页 URL 解析的，而模型写的是相对 DSH agent
   // 工作区的路径 → 直接加载必碎。渲染完成后统一改写成 relay /file 端点（按 taskId 定位
-  // 工作区返回文件）；加载失败再兜一层占位，避免碎图标
+  // 工作区返回文件）/img 缓存端点（relay 已改写的 /img?u=… 补 base+token）；失败再兜占位，避免碎图标
+  function hookImgFallback(img, src) {
+    img.onerror = () => {
+      img.onerror = null;
+      if (!img.isConnected) return;
+      const tip = document.createElement("div");
+      tip.className = "img-fallback";
+      tip.textContent = `⚠ 图片加载失败：${img.getAttribute("alt") || src}`;
+      img.replaceWith(tip);
+    };
+  }
   async function rewriteLocalImgs(div) {
-    if (!activeTaskId || !div.isConnected) return;
+    if (!div.isConnected) return;
     const cfg = await readCfg();
     const base = String(cfg.baseURL ?? "").replace(/\/+$/, "");
     for (const img of div.querySelectorAll("img")) {
       const src = img.getAttribute("src") ?? "";
-      if (!src || /^(https?:|data:|blob:)/i.test(src)) continue;
+      if (!src || /^(https?:|data:|blob:)/i.test(src)) {
+        if (/^https?:/i.test(src) && !img.dataset.errHooked) {
+          img.dataset.errHooked = "1";
+          hookImgFallback(img, src);
+        }
+        continue;
+      }
       if (img.dataset.localRewritten) continue;
       img.dataset.localRewritten = "1";
-      // 代理鉴权模式（token 空）同样省略 token 参数：图片路由由代理注入口令或自行放行
+      // relay 图片缓存端点（md 下发前已改写为 /img?u=…）：补 relay base 与 token 直取缓存
+      if (/^\/img\?/.test(src)) {
+        img.src = `${base}${src}${cfg.apiKey ? `&token=${encodeURIComponent(cfg.apiKey)}` : ""}`;
+        hookImgFallback(img, src);
+        continue;
+      }
+      if (!activeTaskId) continue; // 任务工作区相对路径需要 taskId 定位，无任务时不改写
       img.src = `${base}/file?taskId=${activeTaskId}&p=${encodeURIComponent(src)}${cfg.apiKey ? `&token=${encodeURIComponent(cfg.apiKey)}` : ""}`;
-      img.onerror = () => {
-        img.onerror = null;
-        if (!img.isConnected) return;
-        const tip = document.createElement("div");
-        tip.className = "img-fallback";
-        tip.textContent = `⚠ 图片加载失败：${img.getAttribute("alt") || src}`;
-        img.replaceWith(tip);
-      };
+      hookImgFallback(img, src);
     }
   }
   // 内容已提交进 DOM 但视觉高度为 0（样式层不可见，控制台无任何报错）：直接在面板上标注并吐诊断，
@@ -1724,7 +1743,7 @@ ${assetScripts}
             resetTask();
             addStep(
               "与本地助手（relay）断开超过 1 分钟，已停止监听。请确认 DSH web 服务正在运行，之后可在「历史会话」中切回本会话继续。",
-              true,
+              "warn", // 告警橙而非错误红：断连可恢复，不是任务失败
             );
             setStatus("本地助手连接断开");
             return;
