@@ -760,7 +760,8 @@ ${assetScripts}
     appendRenderNote(div, "内容已渲染但不可见（高度 0），请把控制台 [dsh-assistant] 诊断发我");
   }
 
-  // 对齐 DSH web UI：回合结束后把过程步骤（执行/等待/思考）收进可折叠条，突出最终回复
+  // 对齐 DSH web UI：回合结束后把过程步骤（执行/等待/思考）收进可折叠条，突出最终回复。
+  // 已有折叠条则归并进去（结果之后才到的收尾行也统一收纳），保持整回合只有一个大折叠
   function collapseProcess() {
     const items = [...stepsEl.children].filter(
       (el) =>
@@ -770,8 +771,17 @@ ${assetScripts}
           !el.classList.contains("err")) ||
         el.classList.contains("think"),
     );
+    let det = stepsEl.querySelector(":scope > .proc-box");
+    if (det) {
+      // 已有折叠条（结果落地时建过）：归并后到的收尾行，计数同步刷新
+      if (!items.length) return;
+      const body = det.querySelector(".proc-body");
+      for (const el of items) body.appendChild(el);
+      det.querySelector("summary").textContent = `执行过程（${body.children.length} 步）`;
+      return;
+    }
     if (items.length < 2) return; // 过程太短不折
-    const det = document.createElement("details");
+    det = document.createElement("details");
     det.className = "proc-box";
     const sum = document.createElement("summary");
     sum.textContent = `执行过程（${items.length} 步）`;
@@ -1715,9 +1725,9 @@ ${assetScripts}
           setStatus(d.statusText);
           // 回合终态（已完成/已失败/任务失败/会话模式回合结束）：把本轮过程步骤收进折叠条，对齐 DSH web UI；新回合开始时重置
           const done = /已完成|已失败|任务失败|对话中（可继续输入）|对话中（上一回合异常）/.test(d.statusText);
-          if (done && !procCollapsed) {
+          if (done) {
+            collapseProcess(); // 终态兜底清扫：结果后才到的收尾行也归入同一折叠条（已有条则归并）
             procCollapsed = true;
-            collapseProcess();
           } else if (!done) procCollapsed = false;
         }
         if (d.command) {
