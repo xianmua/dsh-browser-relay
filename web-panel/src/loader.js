@@ -25,14 +25,26 @@ function loadCore() {
       return await import(chrome.runtime.getURL("core/dsh-md-core.js"));
     }
     // 页面版：module script 注入（src 走 relay 静态路由，API 挂 window.__DshMdCore）
-    await new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.type = "module";
-      s.src = `${relayBase}/dsh-md-core.js`;
-      s.onload = resolve;
-      s.onerror = () => reject(new Error(`core 加载失败：${s.src}`));
-      document.head.appendChild(s);
-    });
+    // URL 带版本号：relay 对核心下发一年强缓存，升级版本号即天然换 cache key，避免每页全量重下 4.4MB
+    const coreUrl = `${relayBase}/dsh-md-core.js?v=${encodeURIComponent(PANEL_VERSION)}`;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.type = "module";
+          s.src = coreUrl;
+          s.onload = resolve;
+          s.onerror = () => reject(new Error(`core 加载失败：${coreUrl}`));
+          document.head.appendChild(s);
+        });
+        break;
+      } catch (e) {
+        lastErr = e;
+        if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 4000)); // 4s/8s 退避：公司网络/代理抖动不一次定生死
+      }
+    }
+    if (lastErr) throw lastErr;
     if (!window.__DshMdCore) throw new Error("core 加载后未注册 window.__DshMdCore");
     return window.__DshMdCore;
   })()
