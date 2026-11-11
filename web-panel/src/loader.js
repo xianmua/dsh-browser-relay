@@ -17,6 +17,7 @@ const PANEL_VERSION = typeof __PANEL_VERSION__ === "string" ? __PANEL_VERSION__ 
 // react+shiki+katex+ui-primitives 独立成 core 产物，loader 保持轻量；加载失败降级 marked 轻量管线
 let coreApi = null; // 已加载的 core 模块
 let corePromise = null;
+let lastCoreErr = null; // 最近一次核心加载/渲染失败原因（透传到诊断面板「备胎渲染统计」，免翻 console）
 function loadCore() {
   if (corePromise) return corePromise;
   corePromise = (async () => {
@@ -53,6 +54,7 @@ function loadCore() {
       return m;
     })
     .catch((e) => {
+      lastCoreErr = e;
       console.warn("[dsh-assistant] 渲染核心不可用，markdown 降级 marked 轻量管线：", e);
       corePromise = null; // 允许下次重试
       return null;
@@ -708,12 +710,17 @@ ${assetScripts}
         stepsEl.scrollTop = stepsEl.scrollHeight;
         return;
       } catch (e) {
+        lastCoreErr = e; // 核心加载成功但渲染抛错：原因同样透传诊断面板
         console.warn("[dsh-assistant] DSH 渲染失败，降级 marked：", e);
         if (!div.isConnected) return;
         appendRenderNote(div, `DSH 渲染异常：${String(e?.message ?? e).slice(0, 120)}`);
       }
     }
-    renderMdLegacy(div, text, core ? "核心渲染异常" : "核心不可用");
+    renderMdLegacy(
+      div,
+      text,
+      core ? `核心渲染异常：${String(lastCoreErr?.message ?? lastCoreErr ?? "").slice(0, 80)}` : `核心不可用：${String(lastCoreErr?.message ?? lastCoreErr ?? "").slice(0, 80)}`,
+    );
     await new Promise((r) => setTimeout(r, 200));
     if (div.isConnected && !div.textContent.trim()) {
       // marked 也产出为空：直接显示原文，内容绝不消失
@@ -1551,6 +1558,47 @@ ${assetScripts}
       `出错：${e.message}${/fetch|network|Failed/i.test(e.message) ? "（请确认本地 DSH 已启动，127.0.0.1:9916）" : ""}`,
     );
   }
+  // relay 重启会清空内存里的任务记录：面板侧旧 taskId 失效属非致命。
+  // DSH 侧会话本体仍在——凭 sessionId 自动重挂即可无损恢复对话；重挂失败才降级解绑（告警黄）引导走历史会话
+  const TASK_GONE_RE = /不存在或已清理/;
+  async function taskGone() {
+    const sid =
+      activeSessionId ||
+      (loadSessionList().find((x) => x.taskId === activeTaskId) || {}).sessionId || ""; // 刷新后内存 sessionId 为空，从会话列表反查
+    if (sid) {
+      try {
+        const d = await api(
+          `/task/${activeTaskId}/history?sessionId=${encodeURIComponent(sid)}&tab=${encodeURIComponent(tabKey)}`,
+        );
+        activeSessionId = sid;
+        activeTaskId = d.taskId; // 重挂得到新 taskId
+        sessionStorage.setItem("dshAiTask", String(d.taskId));
+        const entry = loadSessionList().find((x) => x.sessionId === sid);
+        if (entry) saveSessionEntry({ ...entry, taskId: d.taskId }); // 回写会话列表，下次重启反查仍有效
+        chatMode = true; // 重挂会话一律会话模式，可继续输入
+        for (const ev of d.events ?? []) {
+          if (ev.user) addUserBubble(ev.text);
+          else addStep(ev.text, false, ev.md);
+        }
+        collapseProcess(); // 历史回放的执行过程折叠（与切换会话回放口径一致）
+        replayCollapsed = true;
+        addStep(`检测到 relay 重启，已自动重挂会话（新任务 ${d.taskId}，历史 ${d.events?.length ?? 0} 条已恢复）`, "warn");
+        setStatus(d.statusText || "对话中（可继续输入）");
+        setRunning(false);
+        setDialogHook("off");
+        pollLoop(d.taskId, d.seq); // 接管轮询（自增 pollGen 令旧循环失效），从重挂末尾续接不重不漏
+        return;
+      } catch {
+        /* 重挂失败走下方解绑降级 */
+      }
+    }
+    resetTask();
+    addStep(
+      "relay 已重启，原任务记录已清空（对话内容仍保留在 DSH 会话中）。可从「历史会话」切回继续，或直接重新发起任务",
+      "warn",
+    );
+    setStatus("原任务已失效，可从历史会话恢复");
+  }
 
   // ---------- 斜杠命令：/plan 计划模式、/compact 压缩（relay 转调 DSH 官方服务） ----------
   const menuEl = $(".menu");
@@ -1907,7 +1955,11 @@ ${assetScripts}
         }
       }
     } catch (e) {
-      halt(e);
+      // 任务记录随 relay 重启清空：恢复监听撞 404 属预期场景，优雅降级而非红错；
+      // 仅当轮询的仍是当前绑定任务才降级（续聊自动重挂后旧循环已被新 pollLoop 接管，静默退出即可）
+      if (TASK_GONE_RE.test(String(e?.message ?? e))) {
+        if (taskId === activeTaskId) taskGone();
+      } else halt(e);
     }
   }
 
@@ -1958,22 +2010,44 @@ ${assetScripts}
     }
     if (chatMode && activeTaskId) {
       // 会话续聊：同一会话提交新回合（可追问、可继续操作页面）
-      try {
-        const att = await flushAttachments(activeTaskId);
-        if (att === null) return; // 附件上传失败：预览条保留，不提交
-        cancelRequested = false;
-        setDialogHook("on");
-        await api(`/task/${activeTaskId}/message`, {
+      const att = await flushAttachments(activeTaskId);
+      if (att === null) return; // 附件上传失败：预览条保留，不提交
+      const submit = (tid) =>
+        api(`/task/${tid}/message`, {
           method: "POST",
           body: JSON.stringify({ text: task + att, tabKey }),
         });
+      try {
+        cancelRequested = false;
+        setDialogHook("on");
+        await submit(activeTaskId);
         turnStartMs = Date.now(); // 续聊新回合起点（操作条据此显示回合耗时）
         sessionStorage.setItem("dshAiTurnStart", String(turnStartMs));
         setRunning(true);
         // 气泡由 relay 的 user 事件经 poll 回显（刷新重放也能恢复），本地不重复画
         setStatus("已提交，DSH agent 执行中");
       } catch (e) {
-        halt(e);
+        // relay 重启清空任务记录： sessionId 仍在，自动重挂会话后重发一次，用户无感
+        if (!TASK_GONE_RE.test(String(e?.message ?? e)) || !activeSessionId) {
+          halt(e);
+          return;
+        }
+        try {
+          const d = await api(
+            `/task/${activeTaskId}/history?sessionId=${encodeURIComponent(activeSessionId)}&tab=${encodeURIComponent(tabKey)}`,
+          );
+          activeTaskId = d.taskId; // 重挂得到新 taskId，回写绑定
+          sessionStorage.setItem("dshAiTask", String(d.taskId));
+          await submit(d.taskId);
+          turnStartMs = Date.now();
+          sessionStorage.setItem("dshAiTurnStart", String(turnStartMs));
+          setRunning(true);
+          addStep(`检测到 relay 重启，会话已自动重挂（新任务 ${d.taskId}），消息已重新提交`, "warn");
+          setStatus("已提交，DSH agent 执行中");
+          pollLoop(d.taskId, d.seq); // 接管轮询（自增 pollGen 令旧循环失效），从重挂末尾续接不重不漏
+        } catch (e2) {
+          taskGone(); // 重挂也失败：降级解绑，引导走历史会话
+        }
       }
       return;
     }
@@ -2365,7 +2439,7 @@ ${assetScripts}
     });
   }
 
-  // 页面刷新后恢复任务监听
+  // 页面刷新后恢复任务监听；relay 重启清空任务记录时，凭 sessionId 自动重挂 DSH 会话（对话本体在 DSH 侧仍在）
   const savedTask = Number(sessionStorage.getItem("dshAiTask")) || 0;
   if (savedTask) {
     activeTaskId = savedTask;
