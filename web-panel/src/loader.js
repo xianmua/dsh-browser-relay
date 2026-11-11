@@ -440,12 +440,12 @@ export function mountPanel(init = {}) {
       }
     } catch (e) {
       const msg = String(e?.message ?? e);
-      // 失败要显眼：红色错误行（只写状态栏用户注意不到，会以为"发了没反应"）
+      // 失败要显眼：告警黄（非致命，任务照常发送可重传）
       addStep(
         `附件上传失败：${msg}${
           /404|未知接口/.test(msg) ? "（本地 relay 版本过旧，重启 DSH web 服务后重试）" : ""
         }。附件已保留，可直接重发`,
-        true,
+        "warn",
       );
       return null;
     }
@@ -1528,7 +1528,8 @@ ${assetScripts}
     resetTask();
     const label = d.status === "done" ? "完成" : d.status === "cancelled" ? "已停止" : "失败";
     setStatus(d.statusText || label); // 状态栏只放状态词
-    addStep(d.statusText || label, d.status !== "done");
+    // 已停止=用户主动取消非致命，走告警黄；真正失败才是错误红
+    addStep(d.statusText || label, d.status === "cancelled" ? "warn" : d.status !== "done");
     if (d.status === "done") attachActionBar(tid, d.usage);
   }
   function halt(e) {
@@ -1582,7 +1583,7 @@ ${assetScripts}
       addStep(r.message);
       setStatus(r.message);
     } catch (e) {
-      addStep(`${desc}失败：${e.message}`, true);
+      addStep(`${desc}失败：${e.message}`, "warn"); // 命令失败不致命，会话仍可继续
       setStatus(`${desc}失败：${e.message}`);
     }
   }
