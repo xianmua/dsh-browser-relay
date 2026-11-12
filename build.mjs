@@ -8,7 +8,7 @@
 // 构建前先跑 gen-styles.mjs 生成样式。
 
 import { build } from 'esbuild'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -82,3 +82,12 @@ await build({
   define: { ...common.define, IS_EXT: 'true', __DSHMD_LAZY_LANGS__: 'false' }, // content script 每页注入，裁掉懒加载语法控体积
   outfile: join(HERE, 'extension/content/loader.js'),
 })
+
+// 扩展 manifest 版本号自动跟随 package.json（此前 0.7.36~0.7.55 均漏升，Chrome 扩展页一直显示 0.7.35）
+const manifestPath = join(HERE, 'extension/manifest.json')
+const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+if (manifest.version !== version) {
+  manifest.version = version
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + '\n')
+  console.log(`extension/manifest.json 版本同步 → ${version}`)
+}
